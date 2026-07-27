@@ -1,0 +1,1367 @@
+#!/usr/bin/env python3
+"""
+Generate the full HTML document for "Hegemonia: El Grafo de los Mundos" GDD v2.0
+Dark tech premium style with cyan/green neon accents.
+Creative Flow pipeline: HTML -> Playwright -> PDF via html2pdf-next.js
+"""
+
+import html
+import json
+import os
+
+OUTPUT_DIR = "/home/z/my-project/download"
+OUTPUT_HTML = os.path.join(OUTPUT_DIR, "hegemonia_gdd_v2.html")
+
+# ─── PALETTE (custom dark tech) ────────────────────────────────────────────
+# Cascade tier system respected: Area proportional to 1/saturation
+PALETTE = {
+    "page_bg": "#0f172a",         # XL tier: S~0.08
+    "section_bg": "#1e293b",      # XL tier
+    "card_bg": "#1e293b",         # L tier: S~0.15
+    "table_stripe": "#172033",    # L tier
+    "header_fill": "#0e7490",     # M tier: S~0.30 (cyan structural)
+    "cover_block": "#164e63",     # M tier
+    "border": "#334155",          # S tier: S~0.50
+    "icon": "#22d3ee",            # S tier
+    "accent": "#06b6d4",          # XS tier: cyan neon
+    "accent_secondary": "#10b981", # XS tier: green neon (charts)
+    "text_primary": "#f1f5f9",    # near white
+    "text_muted": "#94a3b8",      # muted slate
+    "code_bg": "#0c1222",         # darker than page for code blocks
+    "success": "#34d399",
+    "warning": "#fbbf24",
+    "error": "#f87171",
+    "info": "#60a5fa",
+}
+
+def esc(text):
+    """HTML-escape text."""
+    return html.escape(str(text))
+
+def css_var(name):
+    return f"var(--{name})"
+
+# ─── CSS ──────────────────────────────────────────────────────────────────────
+def build_css():
+    p = PALETTE
+    return f"""
+@page {{
+    size: 720px 1020px;
+    margin: 0;
+}}
+
+:root {{
+    --page-bg: {p['page_bg']};
+    --section-bg: {p['section_bg']};
+    --card-bg: {p['card_bg']};
+    --table-stripe: {p['table_stripe']};
+    --header-fill: {p['header_fill']};
+    --cover-block: {p['cover_block']};
+    --border: {p['border']};
+    --icon: {p['icon']};
+    --accent: {p['accent']};
+    --accent-secondary: {p['accent_secondary']};
+    --text-primary: {p['text_primary']};
+    --text-muted: {p['text_muted']};
+    --code-bg: {p['code_bg']};
+    --success: {p['success']};
+    --warning: {p['warning']};
+    --error: {p['error']};
+    --info: {p['info']};
+    --c-bg: {p['page_bg']};
+    --c-accent: {p['accent']};
+    --c-text: {p['text_primary']};
+    --c-muted: {p['text_muted']};
+    --c-mid: {p['header_fill']};
+    --c-surface: {p['card_bg']};
+}}
+
+html, body {{
+    margin: 0;
+    padding: 0;
+    width: 720px;
+    background: {p['page_bg']};
+    color: {p['text_primary']};
+    font-family: 'Inter', 'Noto Sans SC', 'Liberation Sans', sans-serif;
+    -webkit-font-smoothing: antialiased;
+}}
+
+@media screen {{
+    html {{
+        height: auto;
+        display: flex;
+        justify-content: center;
+        background: #0f172a;
+    }}
+    body {{
+        transform-origin: top center;
+        margin: 20px auto;
+    }}
+}}
+
+/* ─── Cover ──────────────────────────────────────── */
+.cover {{
+    width: 720px;
+    height: 1020px;
+    box-sizing: border-box;
+    break-after: page;
+    overflow: hidden;
+    background: {p['page_bg']};
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: center;
+    position: relative;
+    padding: 300px 60px 80px 60px;
+}}
+
+/* gradient circles removed to avoid overlap detection */
+
+.cover-tag {{
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    color: {p['accent']};
+    background: rgba(6,182,212,0.1);
+    padding: 8px 20px;
+    border-radius: 4px;
+    margin-bottom: 30px;
+    z-index: 1;
+}}
+
+.cover-title {{
+    font-size: 52px;
+    font-weight: 900;
+    line-height: 1.05;
+    color: {p['text_primary']};
+    text-align: center;
+    z-index: 1;
+    margin-bottom: 8px;
+}}
+
+.cover-title span {{
+    color: {p['accent']};
+}}
+
+.cover-subtitle {{
+    font-size: 22px;
+    font-weight: 400;
+    color: {p['text_muted']};
+    text-align: center;
+    z-index: 1;
+    margin-bottom: 40px;
+}}
+
+.cover-meta {{
+    display: flex;
+    gap: 24px;
+    z-index: 1;
+    flex-wrap: wrap;
+    justify-content: center;
+}}
+
+.cover-meta-item {{
+    font-size: 12px;
+    color: {p['text_muted']};
+    background: rgba(255,255,255,0.05);
+    padding: 6px 16px;
+    border-radius: 4px;
+}}
+
+.cover-bottom {{
+    position: absolute;
+    bottom: 40px;
+    font-size: 11px;
+    color: {p['text_muted']};
+    letter-spacing: 1px;
+    z-index: 1;
+}}
+
+/* ─── Main Content ────────────────────────────────── */
+.main-content {{
+    padding: 50px 60px 40px 60px;
+}}
+
+/* ─── TOC ─────────────────────────────────────────── */
+.toc {{
+    margin-bottom: 40px;
+    break-after: avoid;
+}}
+
+.toc-title {{
+    font-size: 22px;
+    font-weight: 800;
+    color: {p['accent']};
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid rgba(6,182,212,0.3);
+}}
+
+.toc-item {{
+    display: flex;
+    align-items: baseline;
+    padding: 6px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+}}
+
+.toc-num {{
+    font-size: 13px;
+    font-weight: 700;
+    color: {p['accent']};
+    min-width: 36px;
+}}
+
+.toc-label {{
+    font-size: 14px;
+    color: {p['text_primary']};
+    flex: 1;
+}}
+
+.toc-page {{
+    font-size: 12px;
+    color: {p['text_muted']};
+    min-width: 24px;
+    text-align: right;
+}}
+
+/* ─── Chapter Headers ──────────────────────────────── */
+.chapter-header {{
+    break-after: avoid;
+    break-inside: avoid;
+    margin-top: 28px;
+}}
+
+.section-tag {{
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: {p['accent']};
+    margin-bottom: 6px;
+}}
+
+.section-title {{
+    font-size: 26px;
+    font-weight: 800;
+    color: {p['text_primary']};
+    line-height: 1.2;
+    margin-bottom: 4px;
+}}
+
+.section-subtitle {{
+    font-size: 16px;
+    font-weight: 400;
+    color: {p['text_muted']};
+    margin-bottom: 10px;
+}}
+
+.divider {{
+    width: 60px;
+    height: 3px;
+    background: linear-gradient(90deg, {p['accent']}, {p['accent_secondary']});
+    border-radius: 2px;
+    margin-bottom: 18px;
+}}
+
+/* ─── Subsection headers ──────────────────────────── */
+.sub-header {{
+    font-size: 18px;
+    font-weight: 700;
+    color: {p['accent']};
+    margin-top: 24px;
+    margin-bottom: 10px;
+    break-after: avoid;
+}}
+
+.sub-header-3 {{
+    font-size: 15px;
+    font-weight: 600;
+    color: {p['icon']};
+    margin-top: 18px;
+    margin-bottom: 8px;
+    break-after: avoid;
+}}
+
+/* ─── Body Text ────────────────────────────────────── */
+.body-text {{
+    font-size: 13.5px;
+    line-height: 1.7;
+    color: {p['text_primary']};
+    margin-bottom: 12px;
+    text-align: left;
+}}
+
+.body-text strong {{
+    color: {p['accent']};
+    font-weight: 600;
+}}
+
+/* ─── Lists ────────────────────────────────────────── */
+ul.styled, ol.styled {{
+    padding-left: 20px;
+    margin-bottom: 14px;
+}}
+
+ul.styled li, ol.styled li {{
+    font-size: 13.5px;
+    line-height: 1.65;
+    color: {p['text_primary']};
+    margin-bottom: 6px;
+    padding-left: 4px;
+}}
+
+ul.styled li::marker {{
+    color: {p['accent']};
+}}
+
+ol.styled li::marker {{
+    color: {p['accent']};
+    font-weight: 700;
+}}
+
+/* ─── Cards ────────────────────────────────────────── */
+.card {{
+    background: {p['card_bg']};
+    border: 1px solid {p['border']};
+    border-radius: 8px;
+    padding: 18px 20px;
+    margin-bottom: 14px;
+    break-inside: avoid;
+}}
+
+.card-accent {{
+    border-left: 3px solid {p['accent']};
+}}
+
+.card-green {{
+    border-left: 3px solid {p['accent_secondary']};
+}}
+
+.card-title {{
+    font-size: 14px;
+    font-weight: 700;
+    color: {p['text_primary']};
+    margin-bottom: 6px;
+}}
+
+.card-body {{
+    font-size: 13px;
+    line-height: 1.6;
+    color: {p['text_muted']};
+}}
+
+/* ─── Tables ──────────────────────────────────────── */
+table.gdd-table {{
+    width: 100%;
+    border-collapse: collapse;
+    margin: 14px 0;
+    font-size: 12px;
+    break-inside: avoid;
+}}
+
+table.gdd-table thead th {{
+    background: {p['header_fill']};
+    color: #ffffff;
+    font-weight: 700;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 10px 12px;
+    text-align: left;
+    border: 1px solid rgba(6,182,212,0.2);
+}}
+
+table.gdd-table tbody td {{
+    padding: 8px 12px;
+    border: 1px solid {p['border']};
+    color: {p['text_primary']};
+    vertical-align: top;
+    line-height: 1.5;
+}}
+
+table.gdd-table tbody tr:nth-child(even) {{
+    background: {p['table_stripe']};
+}}
+
+table.gdd-table tbody tr:nth-child(odd) {{
+    background: rgba(255,255,255,0.02);
+}}
+
+/* ─── Code Blocks ──────────────────────────────────── */
+.code-block {{
+    background: {p['code_bg']};
+    border: 1px solid {p['border']};
+    border-radius: 6px;
+    padding: 16px 18px;
+    margin: 12px 0;
+    font-family: 'Liberation Mono', 'DejaVu Sans Mono', 'Courier New', monospace;
+    font-size: 11.5px;
+    line-height: 1.55;
+    color: {p['accent']};
+    overflow-wrap: break-word;
+    word-break: break-all;
+    break-inside: avoid;
+    white-space: pre-wrap;
+}}
+
+.code-label {{
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: {p['text_muted']};
+    margin-bottom: 6px;
+}}
+
+/* ─── Formula ──────────────────────────────────────── */
+.formula-block {{
+    background: rgba(6,182,212,0.06);
+    border: 1px solid rgba(6,182,212,0.2);
+    border-radius: 6px;
+    padding: 14px 18px;
+    margin: 12px 0;
+    font-family: 'Liberation Mono', 'DejaVu Sans Mono', monospace;
+    font-size: 12px;
+    line-height: 1.6;
+    color: {p['icon']};
+    text-align: center;
+    break-inside: avoid;
+}}
+
+.formula-label {{
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: {p['accent']};
+    margin-bottom: 6px;
+}}
+
+/* ─── Inline code ──────────────────────────────────── */
+code.inline {{
+    background: rgba(6,182,212,0.12);
+    color: {p['accent']};
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-family: 'Liberation Mono', 'DejaVu Sans Mono', monospace;
+    font-size: 12px;
+}}
+
+/* ─── Info boxes ───────────────────────────────────── */
+.info-box {{
+    background: rgba(96,165,250,0.08);
+    border: 1px solid rgba(96,165,250,0.2);
+    border-left: 3px solid {p['info']};
+    border-radius: 6px;
+    padding: 14px 18px;
+    margin: 12px 0;
+    font-size: 13px;
+    line-height: 1.6;
+    color: {p['text_primary']};
+    break-inside: avoid;
+}}
+
+.warn-box {{
+    background: rgba(251,191,36,0.08);
+    border: 1px solid rgba(251,191,36,0.2);
+    border-left: 3px solid {p['warning']};
+    border-radius: 6px;
+    padding: 14px 18px;
+    margin: 12px 0;
+    font-size: 13px;
+    line-height: 1.6;
+    color: {p['text_primary']};
+    break-inside: avoid;
+}}
+
+/* ─── JSON block (styled as code) ──────────────────── */
+.json-block {{
+    background: {p['code_bg']};
+    border: 1px solid {p['border']};
+    border-radius: 6px;
+    padding: 16px 18px;
+    margin: 12px 0;
+    font-family: 'Liberation Mono', 'DejaVu Sans Mono', monospace;
+    font-size: 11px;
+    line-height: 1.55;
+    color: {p['text_primary']};
+    overflow-wrap: break-word;
+    word-break: break-all;
+    break-inside: avoid;
+    white-space: pre-wrap;
+}}
+
+/* ─── Phase list for game loop ─────────────────────── */
+.phase-item {{
+    display: flex;
+    gap: 14px;
+    margin-bottom: 10px;
+    break-inside: avoid;
+}}
+
+.phase-num {{
+    width: 28px;
+    height: 28px;
+    min-width: 28px;
+    background: {p['accent']};
+    color: {p['page_bg']};
+    font-size: 13px;
+    font-weight: 800;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}}
+
+.phase-content {{
+    flex: 1;
+}}
+
+.phase-name {{
+    font-size: 13px;
+    font-weight: 700;
+    color: {p['text_primary']};
+    margin-bottom: 2px;
+}}
+
+.phase-desc {{
+    font-size: 12px;
+    line-height: 1.55;
+    color: {p['text_muted']};
+}}
+
+/* ─── Ideology color badges ─────────────────────────── */
+.badge {{
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+}}
+
+/* ─── Grid for ideology cards ──────────────────────── */
+.ideology-grid {{
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin: 14px 0;
+}}
+
+.ideology-card {{
+    background: {p['card_bg']};
+    border: 1px solid {p['border']};
+    border-radius: 8px;
+    padding: 14px 16px;
+    break-inside: avoid;
+}}
+
+.ideology-card .id-name {{
+    font-size: 13px;
+    font-weight: 700;
+    margin-bottom: 4px;
+}}
+
+.ideology-card .id-philosophers {{
+    font-size: 11px;
+    color: {p['text_muted']};
+    margin-bottom: 6px;
+}}
+
+.ideology-card .id-action {{
+    font-size: 11px;
+    color: {p['accent_secondary']};
+    font-weight: 600;
+}}
+
+/* ─── Footer running head ──────────────────────────── */
+.page-footer {{
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 24px;
+    background: {p['page_bg']};
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 60px;
+    font-size: 10px;
+    color: {p['text_muted']};
+    border-top: 1px solid rgba(255,255,255,0.06);
+}}
+
+/* ─── Numbered list for steps ──────────────────────── */
+.step-list {{
+    counter-reset: step;
+    list-style: none;
+    padding-left: 0;
+}}
+
+.step-list li {{
+    counter-increment: step;
+    position: relative;
+    padding-left: 28px;
+    margin-bottom: 8px;
+    font-size: 13px;
+    line-height: 1.6;
+    color: {p['text_primary']};
+}}
+
+.step-list li::before {{
+    content: counter(step);
+    position: absolute;
+    left: 0;
+    top: 1px;
+    width: 20px;
+    height: 20px;
+    background: rgba(6,182,212,0.15);
+    color: {p['accent']};
+    font-size: 11px;
+    font-weight: 800;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}}
+"""
+
+
+# ─── HTML GENERATION ─────────────────────────────────────────────────────────
+
+def build_cover():
+    return """
+<div class="cover">
+    <div class="cover-tag">Game Design Document v2.0</div>
+    <div class="cover-title">HEGEMONIA</div>
+    <div class="cover-subtitle">El Grafo de los Mundos</div>
+    <div class="cover-meta">
+        <div class="cover-meta-item">Simulacion de Estrategia Emergentista</div>
+        <div class="cover-meta-item">PC (Windows / Mac / Linux)</div>
+        <div class="cover-meta-item">27 de Julio de 2026</div>
+    </div>
+    <div class="cover-bottom">Documento Definitivo para Desarrollo</div>
+</div>
+"""
+
+
+def build_toc():
+    sections = [
+        ("01", "Introduccion y Concepto Central"),
+        ("02", "Fundamentos Matematicos y de Grafos"),
+        ("03", "Estructura de Datos (Clases Fundamentales)"),
+        ("04", "Sistemas Mundo (Ideologias)"),
+        ("05", "Marco Wallerstein (Clasificacion y Movilidad)"),
+        ("06", "Reglas de Interaccion y Emergencias"),
+        ("07", "Inteligencia Artificial (NPCs)"),
+        ("08", "Bucle de Juego (Game Loop)"),
+        ("09", "Interfaz de Usuario (UI/UX)"),
+        ("10", "Recopilacion de Datos y Analisis Post-Partida"),
+        ("11", "Arquitectura Tecnica y Generacion de Codigo"),
+        ("12", "Catalogo de Eventos Historicos (Semilla)"),
+        ("13", "Bibliografia Completa (Fuentes Teoricas)"),
+        ("14", "Instrucciones Finales para el Equipo de Desarrollo"),
+    ]
+    items = ""
+    for num, label in sections:
+        items += f"""
+    <div class="toc-item">
+        <div class="toc-num">{num}</div>
+        <div class="toc-label">{esc(label)}</div>
+    </div>"""
+    return f"""
+<div class="toc">
+    <div class="toc-title">Contenido</div>
+    {items}
+</div>"""
+
+
+def build_section(num, tag, title, subtitle, content):
+    return f"""
+<div class="chapter-header">
+    <div class="section-tag">{esc(tag)}</div>
+    <div class="section-title">{esc(title)}</div>
+    {f'<div class="section-subtitle">{esc(subtitle)}</div>' if subtitle else ''}
+    <div class="divider"></div>
+</div>
+{content}"""
+
+
+# ─── SECTIONS ─────────────────────────────────────────────────────────────────
+
+def section_01():
+    content = """
+<div class="body-text">
+<strong>Hegemonia</strong> no es un RTS de clics rapidos. Es un <strong>simulador estructural</strong> donde el jugador encarna una corriente de pensamiento (filosofico-economico-sociologico-politico) y debe construir un "Sistema Mundo" interconectado. La victoria no se mide en unidades destruidas, sino en la <strong>capacidad de tu ideologia para dominar el flujo global de recursos, imponer tu cultura y redefinir la jerarquia Centro-Periferia</strong> descrita por Wallerstein.
+</div>
+<div class="body-text">
+El juego se fundamenta en tres pilares interconectados que definen toda la experiencia de simulacion. En primer lugar, la <strong>Teoria de Sistemas-Mundo de Wallerstein</strong>, donde el mundo se representa como un grafo dinamico de nodos (Estados/Naciones) que se clasifican automaticamente en Core, Semiperiferia y Periferia segun su centralidad y flujos economicos. En segundo lugar, las <strong>Ideologias como Motor</strong>: cada ideologia no son simples bonificadores, sino que modifican las reglas fisicas del grafo, alterando la friccion, el peso de aristas y la asignacion de recursos. Finalmente, la <strong>Emergencia y Datos</strong>: el sistema genera crisis, hegemonias y revoluciones de forma organica, con el objetivo secundario de extraer datos masivos para analizar como una ideologia domina sobre otra en diferentes contextos.
+</div>
+
+<div class="sub-header">Los Tres Pilares del Juego</div>
+
+<div class="card card-accent">
+    <div class="card-title">1. Teoria de Sistemas-Mundo (Wallerstein)</div>
+    <div class="card-body">El mundo es un grafo dinamico de nodos (Estados/Naciones) que se clasifican automaticamente en Core, Semiperiferia y Periferia segun su centralidad y flujos. Este sistema captura la esencia del Modern World-System de Immanuel Wallerstein, donde la posicion de cada nacion en la jerarquia global determina sus posibilidades de desarrollo, intercambio y supervivencia.</div>
+</div>
+
+<div class="card card-accent">
+    <div class="card-title">2. Ideologia como Motor</div>
+    <div class="card-body">Cada ideologia modifica las reglas fisicas del grafo (friccion, peso de aristas, asignacion de recursos). No son "bonificadores" simples, son leyes de transformacion de la realidad dentro de la simulacion. Un mundo regido por el Liberalismo Clasico se comporta de manera radicalmente distinto a uno dominado por el Ecologismo Radical.</div>
+</div>
+
+<div class="card card-accent">
+    <div class="card-title">3. Emergencia y Datos</div>
+    <div class="card-body">El sistema genera crisis, hegemonias y revoluciones de forma organica. El objetivo secundario es extraer datos masivos (CSV/JSON) para analizar como una ideologia domina sobre otra en diferentes contextos, convirtiendo cada partida en un experimento sociologico repetible.</div>
+</div>
+
+<div class="info-box">
+    <strong>Inspiracion Filosofica:</strong> Immanuel Wallerstein, Karl Marx, Adam Smith, Teoria de Grafos, Cibernetica Social. Cada mecanica del juego tiene una base teorica rigurosa que se traduce en reglas computacionales precisas.
+</div>
+"""
+    return build_section("01", "Seccion 01", "Introduccion y Concepto Central", "Simulacion de Estrategia Emergentista / Sandbox de Sistemas-Mundo", content)
+
+
+def section_02():
+    content = """
+<div class="body-text">
+El modelo matematico subyacente de Hegemonia se basa en la <strong>Teoria de Grafos</strong>. Todo el estado del mundo se representa como un grafo dirigido ponderado G = (V, E), donde V es el conjunto de vertices (nodos/entidades civilizatorias) y E es el conjunto de aristas (edges/relaciones). Cada arista transporta flujos de recursos entre nodos, y el comportamiento del sistema emerge de las interacciones locales entre estos elementos.
+</div>
+
+<div class="sub-header">El Grafo Dinamico G = (V, E)</div>
+<div class="body-text">
+<strong>V (Vertices/Nodos)</strong> representan entidades civilizatorias como "Bloque Socialista del Este" o "Republica Mercantil del Oeste". Cada nodo posee atributos internos que determinan su capacidad productiva, estabilidad social y poder coercitivo. <strong>E (Aristas/Edges)</strong> representan relaciones economicas, culturales o militares entre nodos. Son el alma del juego: todo recurso, influencia y poder viaja por ellas.
+</div>
+
+<div class="sub-header">Metricas de Centralidad (Calculo en Tiempo Real)</div>
+<div class="body-text">
+Cada 10 ticks, el motor recalcula estas metricas fundamentales para clasificar nodos segun el marco de Wallerstein. La centralidad determina la posicion jerarquica de cada civilizacion dentro del sistema-mundo:
+</div>
+
+<div class="card card-accent">
+    <div class="card-title">Centralidad de Eigenvector</div>
+    <div class="card-body">Mide la influencia estructural de un nodo. Un nodo es Core si esta conectado a otros nodos influyentes. No basta con tener muchas conexiones; lo que importa es estar conectado a los nodos correctos. Esta metrica captura la esencia del poder hegemonico descrito por Gramsci.</div>
+</div>
+
+<div class="card card-accent">
+    <div class="card-title">Centralidad de Intermediacion (Betweenness)</div>
+    <div class="card-body">Mide el control del flujo global. Una Semiperiferia suele tener alta intermediacion, actuando como intermediaria entre el Core y la Periferia. Estos nodos son los "broker states" que canalizan recursos y ejercen influencia desproporcionada.</div>
+</div>
+
+<div class="card card-accent">
+    <div class="card-title">Grado de Entrada/Salida (In/Out Degree)</div>
+    <div class="card-body">Cuantas aristas llegan y salen de cada nodo. Una Periferia tipica tiene alto In-Degree (recibe flujos de extraccion) y bajo Out-Degree (poca capacidad de exportacion). El equilibrio entre entrada y salida revela la dependencia estructural de cada nodo.</div>
+</div>
+"""
+    return build_section("02", "Seccion 02", "Fundamentos Matematicos y de Grafos", "Grafo Dirigido Ponderado G = (V, E)", content)
+
+
+def section_03():
+    content = """
+<div class="body-text">
+La arquitectura de datos de Hegemonia se basa en dos clases fundamentales que modelan la totalidad del estado del mundo: la clase <code class="inline">Node</code> (Nodo) y la clase <code class="inline">Edge</code> (Arista). Cada instancia de estas clases contiene atributos numericos, enumeraciones y metodos que encapsulan toda la logica de simulacion.
+</div>
+
+<div class="sub-header">3.1 Clase Nodo (Node)</div>
+
+<table class="gdd-table">
+<thead><tr><th>Campo</th><th>Tipo</th><th>Rango / Default</th><th>Descripcion</th></tr></thead>
+<tbody>
+<tr><td><code class="inline">id</code></td><td>string</td><td>-</td><td>Identificador unico (ej. Civil_01)</td></tr>
+<tr><td><code class="inline">ideology_id</code></td><td>string</td><td>-</td><td>Referencia a la ideologia</td></tr>
+<tr><td><code class="inline">layer</code></td><td>enum</td><td>Core / Semi / Periphery / External</td><td>Clasificacion de Wallerstein</td></tr>
+<tr><td><code class="inline">gdp</code></td><td>float</td><td>100.0</td><td>Producto Interno Bruto total</td></tr>
+<tr><td><code class="inline">population</code></td><td>float</td><td>10.0 (millones)</td><td>Afecta disponibilidad de trabajo</td></tr>
+<tr><td><code class="inline">technology_level</code></td><td>float</td><td>1.0</td><td>Multiplicador de eficiencia</td></tr>
+<tr><td><code class="inline">military_power</code></td><td>float</td><td>10.0</td><td>Capacidad coercitiva</td></tr>
+<tr><td><code class="inline">social_cohesion</code></td><td>float</td><td>0.0 - 1.0 (0.7)</td><td>Estabilidad interna</td></tr>
+<tr><td><code class="inline">cultural_influence</code></td><td>float</td><td>0.0 - 1.0 (0.5)</td><td>Atraccion ideologica</td></tr>
+</tbody>
+</table>
+
+<div class="body-text">
+Cada nodo contiene ademas un diccionario de <strong>recursos internos</strong>: capital_financiero, materia_prima, trabajo_abstracto, conocimiento_tecnologico y legitimidad_politica. Estos recursos se generan internamente y fluyen entre nodos a traves de las aristas.
+</div>
+
+<div class="sub-header-3">Recursos Internos (Dict)</div>
+<table class="gdd-table">
+<thead><tr><th>Recurso</th><th>Default</th><th>Descripcion</th></tr></thead>
+<tbody>
+<tr><td>capital_financiero</td><td>50.0</td><td>Dinero e inversion disponible</td></tr>
+<tr><td>materia_prima</td><td>50.0</td><td>Recursos naturales explotables</td></tr>
+<tr><td>trabajo_abstracto</td><td>50.0</td><td>Fuerza laboral (Marx: valor)</td></tr>
+<tr><td>conocimiento_tecnologico</td><td>50.0</td><td>Patentes, educacion, I+D</td></tr>
+<tr><td>legitimidad_politica</td><td>50.0</td><td>Consenso interno del gobierno</td></tr>
+</tbody>
+</table>
+
+<div class="sub-header-3">Metodos Asociados</div>
+<div class="formula-block">
+calculate_production(): float = (gdp * technology_level) / (1 + (population / 100))
+</div>
+<div class="formula-block">
+calculate_class_struggle_index(): float = 1 - social_cohesion + ((materia_prima / capital_financiero) * 0.2)
+</div>
+
+<div class="sub-header">3.2 Clase Arista (Edge)</div>
+
+<table class="gdd-table">
+<thead><tr><th>Campo</th><th>Tipo</th><th>Descripcion</th></tr></thead>
+<tbody>
+<tr><td><code class="inline">id</code></td><td>string</td><td>Identificador unico</td></tr>
+<tr><td><code class="inline">source / target</code></td><td>string (ref Node)</td><td>Origen y destino del flujo</td></tr>
+<tr><td><code class="inline">type</code></td><td>enum</td><td>comercio_equitativo, extraccion_desigual, influencia_cultural, alianza_militar, dependencia_tecnologica</td></tr>
+<tr><td><code class="inline">directionality</code></td><td>enum</td><td>bidireccional, unidireccional_source_to_target, unidireccional_target_to_source</td></tr>
+<tr><td><code class="inline">weight</code></td><td>float</td><td>Flujo bruto de recursos por tick</td></tr>
+<tr><td><code class="inline">friction</code></td><td>float (0-1)</td><td>Perdida por distancia o aranceles</td></tr>
+<tr><td><code class="inline">cultural_affinity</code></td><td>float (0-1)</td><td>Similitud ideologica (1 = identicos)</td></tr>
+</tbody>
+</table>
+
+<div class="sub-header-3">Metodo Crucial: calculate_net_flow()</div>
+<div class="code-block">
+float flow = (source.gdp * source.technology_level) * (target.gdp * target.technology_level);
+float distance = 1 + (abs(source.ideology_id_vector - target.ideology_id_vector) / 100);
+float efficiency = (1 - edge.friction) * edge.cultural_affinity;
+return (flow / distance) * efficiency;
+</div>
+<div class="body-text">
+Esta formula captura la esencia de la teoria del comercio internacional: el flujo entre dos nodos depende de sus tamanos economicos relativos, la distancia ideologica que los separa (friccion cultural), y la afinidad existente entre sus sistemas politicos.
+</div>
+"""
+    return build_section("03", "Seccion 03", "Estructura de Datos", "Clases Fundamentales: Node y Edge", content)
+
+
+def section_04():
+    ideologies = [
+        ("Liberalismo Clasico", "liberalismo_clasico", "#00A86B", "Smith, Ricardo, Mill",
+         "Friccion 0% entre liberales. Peso x1.2. Capital: 70%, Conocimiento: 20%, Materia: 10%.",
+         "Firmar TLC: Convierte aristas unidireccionales en bidireccionales (Cooldown: 10 ticks)"),
+        ("Marxismo-Socialismo", "marxismo_socialismo", "#FF0000", "Marx, Engels, Lenin, Luxemburg",
+         "Friccion -20% entre socialistas. Peso x0.9. Trabajo: 70%, Materia: 20%, Capital: 10%.",
+         "Nacionalizar: Roba 50% del flujo de una arista enemiga entrante (Cooldown: 15 ticks)"),
+        ("Mercantilismo", "mercantilismo", "#FF8C00", "Thomas Mun, Colbert",
+         "Friccion +30% importaciones. Peso x1.0. Capital: 50%, Militar: 40%, Materia: 10%.",
+         "Devaluacion: Duplica peso de aristas salientes por 3 ticks (Cooldown: 20 ticks)"),
+        ("Anarquismo Mutualista", "anarquismo_mutualista", "#800080", "Proudhon, Bakunin, Kropotkin",
+         "Friccion 0%. Peso x1.0. Trabajo: 40%, Legitimidad: 40%, Capital: 20%.",
+         "Federacion: Fusiona dos nodos aliados sumando recursos (Cooldown: 30 ticks)"),
+        ("Fascismo Corporativista", "fascismo_corporativismo", "#6B7280", "Gentile, Rocco, Spengler",
+         "Friccion 0%. Peso x0.8. Militar: 60%, Capital: 30%, Materia: 10%.",
+         "Propaganda: Invierte direccion de arista cultural enemiga (Cooldown: 12 ticks)"),
+        ("Ecologismo Radical", "ecologismo_radical", "#228B22", "Bookchin, Daly, Gorz",
+         "Friccion -10%. Peso x0.6. Materia: 50%, Legitimidad: 50%, Capital: 0%.",
+         "Reforestacion del Grafo: Elimina extraccion, las vuelve comercio (Cooldown: 25 ticks)"),
+    ]
+
+    cards = ""
+    for name, iid, color, philosophers, mechanics, action in ideologies:
+        cards += f"""
+    <div class="ideology-card" style="border-left: 3px solid {color};">
+        <div class="id-name" style="color: {color};">{esc(name)}</div>
+        <div class="id-philosophers">{esc(philosophers)}</div>
+        <div class="card-body" style="margin-bottom: 6px;">{esc(mechanics)}</div>
+        <div class="id-action">Accion: {esc(action)}</div>
+    </div>"""
+
+    content = f"""
+<div class="body-text">
+El jugador elige UNA de seis ideologias al inicio de la partida. Cada una tiene una mecanica de grafo unica que altera fundamentalmente como fluyen los recursos, como se conectan los nodos y como se resuelven los conflictos. No son simplemente "razas" con bonificadores diferentes: son <strong>paradigmas completos de organizacion socioeconomica</strong> que reescriben las reglas del mundo.
+</div>
+
+<div class="sub-header">Las Seis Ideologias Disponibles</div>
+<div class="ideology-grid">
+    {cards}
+</div>
+
+<div class="info-box">
+    Cada ideologia modifica las reglas fisicas del grafo. Un mundo regido por el Liberalismo Clasico genera flujos comerciales mas eficientes entre nodos afines, mientras que el Ecologismo Radical reduce deliberadamente el throughput para modelar el decrecimiento. La eleccion de ideologia define la experiencia completa de la partida.
+</div>
+"""
+    return build_section("04", "Seccion 04", "Sistemas Mundo (Ideologias)", "Seis paradigmas que redefinen las reglas del grafo", content)
+
+
+def section_05():
+    content = """
+<div class="body-text">
+Basado en el marco teorico de Immanuel Wallerstein (1974-1989), el sistema clasifica automaticamente cada nodo en una de cuatro capas jerarquicas. Esta clasificacion se recalcula cada 10 ticks basandose en metricas de centralidad de grafo, creando un sistema dinamico donde las naciones pueden ascender y descender en la jerarquia global.
+</div>
+
+<div class="sub-header">5.1 Reglas de Clasificacion (Cada 10 ticks)</div>
+
+<table class="gdd-table">
+<thead><tr><th>Capa</th><th>Condicion Matematica</th></tr></thead>
+<tbody>
+<tr><td><strong>Core</strong></td><td>Eigenvector Centrality &gt; 0.6 AND Betweenness Centrality &gt; 0.3 AND GDP &gt; avg(GDP) * 1.5</td></tr>
+<tr><td><strong>Semiperiphery</strong></td><td>Betweenness Centrality &gt; 0.4 AND Eigenvector Centrality entre 0.3 y 0.6</td></tr>
+<tr><td><strong>Periphery</strong></td><td>Out Degree &lt; 3 AND (GDP &lt; avg(GDP) * 0.7 OR Dependency Ratio &gt; 0.6)</td></tr>
+<tr><td><strong>External</strong></td><td>Grado total (entrada + salida) == 0 (aislamiento total)</td></tr>
+</tbody>
+</table>
+
+<div class="sub-header">5.2 Movilidad Social entre Capas</div>
+<div class="body-text">
+El sistema permite movilidad vertical dentro de la jerarquia mundial, reflejando los procesos historicos de industrializacion, declive hegemonico y marginalizacion. Los nodos no estan condenados a permanecer en su capa inicial; la dinamica del grafo puede elevar una Periferia a Semi-periferia o hundir un Core en la marginalidad.
+</div>
+
+<div class="card card-green">
+    <div class="card-title">Ascenso (Periferia a Semi-periferia)</div>
+    <div class="card-body">Mantener Out Degree &gt; 5 y Tech Level &gt; 3 durante 20 ticks consecutivos. Representa el proceso de industrializacion y diversificacion exportadora que permite a una nacion periferica ganar autonomia economica.</div>
+</div>
+
+<div class="card card-accent">
+    <div class="card-title">Descenso (Core a Periferia)</div>
+    <div class="card-body">Perder el 60% de las aristas salientes en 10 ticks (por guerra o crisis). Modela el colapso hegemonico cuando una potencia pierde sus redes comerciales y de influencia, como el caso britanico post-1945.</div>
+</div>
+
+<div class="sub-header-3">Formula de Razon de Dependencia</div>
+<div class="formula-block">
+Dependency Ratio = sum(edge.weight for incoming extraction edges) / sum(edge.weight for all outgoing edges)
+</div>
+<div class="body-text">
+Esta metrica cuantifica que tan dependiente es un nodo del flujo entrante de tipo "extraccion desigual". Un valor alto indica que la economia del nodo depende principalmente de la exportacion de materias primas hacia el Core, caracteristica definitoria de la Periferia en el modelo wallersteiniano.
+</div>
+"""
+    return build_section("05", "Seccion 05", "Marco Wallerstein", "Clasificacion y Movilidad Social", content)
+
+
+def section_06():
+    content = """
+<div class="body-text">
+Las reglas de interaccion definen como los recursos fluyen entre nodos cada tick y bajo que condiciones emergen fenomenos macroscopicos como hegemonias, depresiones economicas y revoluciones. Estas no son eventos scripteados sino patrones emergentes que surgen de las interacciones locales.
+</div>
+
+<div class="sub-header">6.1 Formula de Flujo Economico (Tick a Tick)</div>
+
+<div class="formula-block">
+Flujo Neto = (GDP_Source * Tech_Source) * (GDP_Target * Tech_Target) / (1 + Distancia_Ideologica) * (1 - Friccion) * Afinidad_Cultural
+</div>
+
+<div class="body-text">
+Esta formula integra los conceptos de gravedad economica (producto de los GDP), friccion comercial (aranceles, distancia logistica, barreras culturales) y afinidad ideologica. Dos nodos con GDP alto e ideologias similares generan flujos intensos, mientras que nodos ideologicamente distantes experimentan comercio reducido.
+</div>
+
+<div class="sub-header">6.2 Emergencia de Hegemonia</div>
+
+<div class="warn-box">
+<strong>Trigger:</strong> Un solo nodo acumula el 40% del flujo total del grafo durante 30 ticks consecutivos.<br>
+<strong>Efecto:</strong> El nodo hegemonico gana la habilidad "Veto" (bloquea una arista enemiga por 5 ticks, cooldown 20 ticks). Modela el poder estructural del hegemon para imponer reglas al sistema, inspirado en el concepto gramsciano de hegemonia cultural.
+</div>
+
+<div class="sub-header">6.3 Sistema de Crisis (Eventos Emergentes)</div>
+
+<table class="gdd-table">
+<thead><tr><th>Crisis</th><th>Trigger</th><th>Efecto</th></tr></thead>
+<tbody>
+<tr><td><strong>Depresion Economica</strong></td><td>Suma de aristas unidireccionales &gt; 3 * Suma de bidireccionales</td><td>Todos los pesos de aristas se reducen un 30% durante 15 ticks.</td></tr>
+<tr><td><strong>Revolucion Interna</strong></td><td>Cohesion Social &lt; 0.3 AND Indice de Lucha de Clases &gt; 0.8</td><td>El nodo cambia a una ideologia aleatoria y pierde 50% de recursos.</td></tr>
+<tr><td><strong>Guerra Fria Cultural</strong></td><td>Dos nodos con Hegemon Score &gt; 30 y distancia ideologica &gt; 80</td><td>Aristas culturales se duplican, comerciales se anulan entre ellos.</td></tr>
+</tbody>
+</table>
+
+<div class="body-text">
+Cada crisis es un atractor del sistema que emerge cuando ciertos umbrales se superan. La Depresion Economica refleja la sobre-explotacion comercial desigual; la Revolucion Interna modela la implosion de estados con alta desigualdad; y la Guerra Fria Cultural representa la polarizacion ideologica que fragmenta el comercio global.
+</div>
+"""
+    return build_section("06", "Seccion 06", "Reglas de Interaccion y Emergencias", "Dinamica del flujo, hegemonia y crisis emergentes", content)
+
+
+def section_07():
+    content = """
+<div class="body-text">
+Los nodos controlados por la CPU utilizan un <strong>Sistema de Utilidad</strong> para la toma de decisiones. Cada tick, cada NPC evalua todas las acciones posibles y ejecuta la de mayor utilidad esperada. Este sistema garantiza que los agentes NPC exhiban comportamientos coherentes con su ideologia y reactivos al estado del mundo.
+</div>
+
+<div class="sub-header">Pesos de Utilidad por Ideologia</div>
+
+<table class="gdd-table">
+<thead><tr><th>Ideologia</th><th>Comercio</th><th>Guerra</th><th>Alianza</th><th>Expansion</th></tr></thead>
+<tbody>
+<tr><td>Liberalismo Clasico</td><td>0.8</td><td>0.1</td><td>0.3</td><td>0.6</td></tr>
+<tr><td>Marxismo-Socialismo</td><td>0.3</td><td>0.2</td><td>0.7</td><td>0.8</td></tr>
+<tr><td>Mercantilismo</td><td>0.5</td><td>0.6</td><td>0.2</td><td>0.4</td></tr>
+<tr><td>Anarquismo Mutualista</td><td>0.7</td><td>0.0</td><td>0.9</td><td>0.2</td></tr>
+<tr><td>Fascismo Corporativista</td><td>0.2</td><td>0.9</td><td>0.4</td><td>0.7</td></tr>
+<tr><td>Ecologismo Radical</td><td>0.4</td><td>0.0</td><td>0.6</td><td>0.1</td></tr>
+</tbody>
+</table>
+
+<div class="sub-header">Logica de Decision</div>
+<div class="body-text">
+Cada tick, el NPC calcula la utilidad de cada accion posible (comerciar con X, atacar a Y, aliarse con Z) multiplicando el peso base de la accion por la ganancia potencial estimada. La accion con mayor utilidad se ejecuta. Este sistema produce comportamientos emergentes: los liberales buscan activamente socios comerciales, los fascistas priorizan la expansion militar, y los anarquistas nunca inician conflictos armados.
+</div>
+
+<div class="formula-block">
+Utilidad = Peso_Base * Ganancia_Potencial
+</div>
+"""
+    return build_section("07", "Seccion 07", "Inteligencia Artificial (NPCs)", "Sistema de Utilidad para toma de decisiones", content)
+
+
+def section_08():
+    content = """
+<div class="body-text">
+El bucle de juego es el corazon del simulador. Cada <strong>Tick</strong> (1 segundo en tiempo real) ejecuta 8 pasos secuenciales que actualizan el estado completo del mundo. El orden de ejecucion es estricto y deterministico: cambiar el orden altera fundamentalmente el comportamiento emergente del sistema.
+</div>
+
+<div class="sub-header">Los 8 Pasos del Game Loop</div>
+
+<div class="phase-item">
+    <div class="phase-num">1</div>
+    <div class="phase-content">
+        <div class="phase-name">Produccion Interna</div>
+        <div class="phase-desc">Cada nodo genera recursos segun su GDP y tecnologia. Se ejecuta calculate_production() para todos los nodos y se actualiza el campo de recursos internos con la produccion del tick actual.</div>
+    </div>
+</div>
+
+<div class="phase-item">
+    <div class="phase-num">2</div>
+    <div class="phase-content">
+        <div class="phase-name">Calculo de Flujo de Aristas</div>
+        <div class="phase-desc">Se itera sobre todas las aristas, se aplica la formula economica y se transfieren recursos entre nodos considerando la direccionalidad de cada arista y la afinidad cultural.</div>
+    </div>
+</div>
+
+<div class="phase-item">
+    <div class="phase-num">3</div>
+    <div class="phase-content">
+        <div class="phase-name">Dinamicas Internas</div>
+        <div class="phase-desc">Se recalcula la Cohesion Social basada en la desigualdad interna (Class Struggle Index). Nodos con alta desigualdad experimentan caida de cohesion y riesgo de revolucion.</div>
+    </div>
+</div>
+
+<div class="phase-item">
+    <div class="phase-num">4</div>
+    <div class="phase-content">
+        <div class="phase-name">IA de NPCs</div>
+        <div class="phase-desc">Los nodos CPU ejecutan su Sistema de Utilidad para decidir acciones: comercio, guerra, alianzas o acciones especiales ideologicas.</div>
+    </div>
+</div>
+
+<div class="phase-item">
+    <div class="phase-num">5</div>
+    <div class="phase-content">
+        <div class="phase-name">Reclasificacion Wallerstein</div>
+        <div class="phase-desc">Cada 10 ticks, se calculan las centralidades de Eigenvector y Betweenness, y se reasignan las capas (Core/Semiperiferia/Periferia/External) segun las reglas de clasificacion.</div>
+    </div>
+</div>
+
+<div class="phase-item">
+    <div class="phase-num">6</div>
+    <div class="phase-content">
+        <div class="phase-name">Verificacion de Emergencias</div>
+        <div class="phase-desc">Se revisan los triggers de hegemonia, depresion economica, revolucion interna y guerra fria cultural. Si se activan, se aplican los efectos correspondientes.</div>
+    </div>
+</div>
+
+<div class="phase-item">
+    <div class="phase-num">7</div>
+    <div class="phase-content">
+        <div class="phase-name">Registro de Datos</div>
+        <div class="phase-desc">Se guarda el snapshot actual del estado del mundo en disco (CSV/JSON) para analisis post-partida.</div>
+    </div>
+</div>
+
+<div class="phase-item">
+    <div class="phase-num">8</div>
+    <div class="phase-content">
+        <div class="phase-name">Renderizado y UI</div>
+        <div class="phase-desc">Se actualiza la vista 3D del grafo con fisica Force-Atlas 2 y los paneles HUD con metricas globales, log de eventos y tooltips.</div>
+    </div>
+</div>
+"""
+    return build_section("08", "Seccion 08", "Bucle de Juego (Game Loop)", "8 pasos secuenciales por tick", content)
+
+
+def section_09():
+    content = """
+<div class="body-text">
+La interfaz de usuario esta disenada para proporcionar informacion completa sobre el estado del grafo mundial sin abrumar al jugador. La distribucion de pantalla refleja la dualidad del juego: visualizacion del sistema (70% izquierdo) y control estrategico (30% derecho).
+</div>
+
+<div class="sub-header">9.1 Distribucion de Pantalla</div>
+
+<div class="card card-accent">
+    <div class="card-title">Vista de Grafo (70% izquierda)</div>
+    <div class="card-body">Visualizacion 3D con fisica Force-Atlas 2. Los nodos son esferas cuyo tamano refleja el GDP y cuyo color indica la ideologia. Las aristas son lineas cuyo grosor representa el flujo de recursos. El jugador puede hacer zoom, pan y seleccionar nodos individuales para inspeccionar sus atributos.</div>
+</div>
+
+<div class="card card-green">
+    <div class="card-title">Panel de Control (30% derecha)</div>
+    <div class="card-body">Contiene sliders para ajustar parametros internos (Tasa de Impuestos, Gasto en Educacion, Inversion Militar), botones de Acciones Especiales que cambian segun la ideologia del jugador, y graficos en tiempo real de las metricas clave del nodo seleccionado.</div>
+</div>
+
+<div class="sub-header">9.2 HUD Flotante</div>
+<table class="gdd-table">
+<thead><tr><th>Componente</th><th>Posicion</th><th>Contenido</th></tr></thead>
+<tbody>
+<tr><td>Log de Eventos</td><td>Parte inferior</td><td>Ultimos 50 eventos: crisis, revoluciones, hegemonias, acuerdos comerciales</td></tr>
+<tr><td>Metricas Globales</td><td>Parte superior</td><td>GDP Global, Cohesion Promedio, Candidato a Hegemon, Gini Coefficient</td></tr>
+<tr><td>Tooltip de Nodo</td><td>Hover sobre nodo</td><td>Ideologia, Capa, GDP, Cohesion, Grado Entrada/Salida</td></tr>
+<tr><td>Tooltip de Arista</td><td>Hover sobre arista</td><td>Tipo, Flujo Neto, Friccion, Direccion</td></tr>
+</tbody>
+</table>
+"""
+    return build_section("09", "Seccion 09", "Interfaz de Usuario (UI/UX)", "Visualizacion 3D + Panel de Control estrategico", content)
+
+
+def section_10():
+    content = """
+<div class="body-text">
+Hegemonia esta disenado como una herramienta de investigacion social. Cada partida genera automaticamente un dataset completo que permite el analisis cuantitativo de como las diferentes ideologias compiten, colapsan y se transforman. Los datos se almacenan en formatos abiertos (CSV y JSON) compatibles con herramientas de analisis como Python/Pandas, R y Gephi.
+</div>
+
+<div class="sub-header">10.1 Snapshot por Tick (JSON)</div>
+
+<div class="json-block">{{
+  "tick": 123,
+  "nodes": [{{
+    "id": "X",
+    "layer": "Core",
+    "gdp": 150.5,
+    "cohesion": 0.8,
+    "resources": {{ ... }}
+  }}],
+  "edges": [{{
+    "source": "A",
+    "target": "B",
+    "flow": 30.2,
+    "type": "extraccion_desigual"
+  }}],
+  "global": {{
+    "total_circulation": 5000,
+    "gini": 0.45,
+    "hegemon_id": "Liberal_01"
+  }}
+}}</div>
+
+<div class="sub-header">10.2 Analisis Post-Partida (Generados automaticamente)</div>
+<div class="body-text">Al finalizar cada partida, el sistema genera automaticamente los siguientes analisis visuales y cuantitativos que permiten comprender la dinamica historica de la simulacion:</div>
+
+<table class="gdd-table">
+<thead><tr><th>Analisis</th><th>Formato</th><th>Descripcion</th></tr></thead>
+<tbody>
+<tr><td>Diagrama de Sankey</td><td>JSON visualizable</td><td>Muestra que ideologia absorbio recursos de cual. Flujo neto acumulado por tipo de arista e ideologia.</td></tr>
+<tr><td>Linea de Tiempo de Centralidad</td><td>Serie temporal</td><td>Evolucion de Eigenvector para cada nodo. Permite ver ascensos y caidas de potencias.</td></tr>
+<tr><td>Log de Movilidad</td><td>Array JSON</td><td>Registro de cuando una Periferia ascendio a Core o viceversa, con tick y causa.</td></tr>
+<tr><td>Log de Eventos</td><td>Lista JSON</td><td>Todas las crisis, revoluciones y guerras con causa raiz y efecto cuantificado.</td></tr>
+</tbody>
+</table>
+
+<div class="info-box">
+<strong>Proposito cientifico:</strong> Estos datos permiten comparar hipotesis como "el marxismo domina en mundos con alta desigualdad inicial" o "el liberalismo genera hegemonias mas estables pero menos equitativas". Cada partida es un experimento repetible.
+</div>
+"""
+    return build_section("10", "Seccion 10", "Recopilacion de Datos y Analisis Post-Partida", "Datasets automaticos para investigacion social", content)
+
+
+def section_11():
+    content = """
+<div class="body-text">
+La arquitectura tecnica de Hegemonia esta disenada para ser modular y extensible. El motor grafico maneja la visualizacion 3D del grafo, mientras que el backend de calculo ejecuta los algoritmos de teoria de grafos y simulacion economica. La comunicacion entre ambos puede realizarse via sockets o archivos compartidos.
+</div>
+
+<div class="sub-header">11.1 Tecnologias Sugeridas</div>
+
+<table class="gdd-table">
+<thead><tr><th>Componente</th><th>Tecnologia</th><th>Notas</th></tr></thead>
+<tbody>
+<tr><td>Motor Grafico</td><td>Unity (C#) o Godot (C#/GDScript)</td><td>Para la UI 3D, fisica Force-Atlas 2, tooltips</td></tr>
+<tr><td>Backend de Calculo</td><td>Python + NetworkX + Pandas</td><td>Centralidades, logging, graficos post-partida</td></tr>
+<tr><td>Almacenamiento</td><td>SQLite o JSON planos</td><td>Configuracion de ideologias, snapshots</td></tr>
+<tr><td>Comunicacion</td><td>Sockets o archivos</td><td>Motor grafico <-> Backend de calculo</td></tr>
+</tbody>
+</table>
+
+<div class="sub-header">11.2 Clases Prioritarias para el Codigo</div>
+
+<table class="gdd-table">
+<thead><tr><th>Clase</th><th>Tipo</th><th>Responsabilidad</th></tr></thead>
+<tbody>
+<tr><td><code class="inline">GameManager</code></td><td>Singleton</td><td>Controla el bucle de ticks y la sincronizacion global</td></tr>
+<tr><td><code class="inline">GraphManager</code></td><td>Core</td><td>Administra nodos/aristas, ejecuta algoritmos de centralidad</td></tr>
+<tr><td><code class="inline">IdeologyFactory</code></td><td>Factory</td><td>Carga las ideologias desde JSON de configuracion</td></tr>
+<tr><td><code class="inline">WallersteinClassifier</code></td><td>Strategy</td><td>Ejecuta reglas de clasificacion cada 10 ticks</td></tr>
+<tr><td><code class="inline">DataLogger</code></td><td>Utility</td><td>Serializa snapshots y escribe en disco en segundo plano</td></tr>
+</tbody>
+</table>
+
+<div class="sub-header">11.3 Configuracion del Motor</div>
+<div class="json-block">{{
+  "tick_rate_seconds": 1.0,
+  "max_nodes": 50,
+  "max_edges_per_node": 10,
+  "seed_configuration": {{
+    "initial_nodes": 6,
+    "initial_edges": 5,
+    "start_ideologies": [
+      "liberalismo_clasico",
+      "marxismo_socialismo",
+      "mercantilismo",
+      "anarquismo_mutualista",
+      "fascismo_corporativismo",
+      "ecologismo_radical"
+    ]
+  }},
+  "graph_physics": {{
+    "force_atlas_2": true,
+    "repulsion_strength": 200.0,
+    "attraction_strength": 10.0,
+    "gravity": 0.5
+  }}
+}}</div>
+"""
+    return build_section("11", "Seccion 11", "Arquitectura Tecnica", "Motor, backend, almacenamiento y clases prioritarias", content)
+
+
+def section_12():
+    content = """
+<div class="body-text">
+El motor de simulacion incluye un catalogo de eventos historicos que se disparan automaticamente cuando se cumplen ciertas condiciones en el estado del mundo. Estos eventos anaden profundidad narrativa y modelan patrones recurrentes de la historia economica global. No son eventos scripteados sino atractores del sistema que emergen cuando los umbrales apropiados se alcanzan.
+</div>
+
+<table class="gdd-table">
+<thead><tr><th>Evento</th><th>Trigger</th><th>Efecto</th></tr></thead>
+<tbody>
+<tr><td><strong>Crisis de 1929</strong></td><td>Caida del flujo global &gt; 40% en 5 ticks</td><td>Todos los nodos pierden 20% de cohesion y 15% de GDP. Representa un colapso financiero sistematico.</td></tr>
+<tr><td><strong>Revolucion Industrial</strong></td><td>Un nodo alcanza Tech Level 10</td><td>Duplica permanentemente el peso de sus aristas salientes. Modela la transformacion productiva que redefine el comercio global.</td></tr>
+<tr><td><strong>Colapso Sovietico</strong></td><td>Un nodo Marxista tiene vecinos Perifericos con Cohesion &lt; 0.2</td><td>El nodo Marxista pierde 50% de recursos y cambia a Liberal. Simula la implosion de un bloque ideologico.</td></tr>
+</tbody>
+</table>
+
+<div class="info-box">
+Estos eventos sirven como "semillas narrativas" que conectan la simulacion abstracta con la historia real. El sistema puede extenderse facilmente con nuevos eventos siguiendo el mismo patron de trigger-efecto.
+</div>
+"""
+    return build_section("12", "Seccion 12", "Catalogo de Eventos Historicos", "Semillas narrativas que emergen del estado del mundo", content)
+
+
+def section_13():
+    content = """
+<div class="body-text">
+Cada mecanica del juego tiene una base teorica rigurosa en las ciencias sociales y economicas. La siguiente bibliografia detalla las fuentes primarias que inspiraron cada subsistema del simulador, desde los fundamentos de la teoria del comercio hasta la cibernetica social.
+</div>
+
+<table class="gdd-table">
+<thead><tr><th>Campo</th><th>Cita</th><th>Aplicacion en el Juego</th></tr></thead>
+<tbody>
+<tr><td>Economia</td><td>Smith, A. (1776). La Riqueza de las Naciones.</td><td>Calculo de oferta/demanda y peso de aristas entre nodos afines.</td></tr>
+<tr><td>Economia</td><td>Marx, K. (1867). El Capital.</td><td>Calculo de plusvalia y tasa de explotacion en aristas unidireccionales.</td></tr>
+<tr><td>Sociologia</td><td>Wallerstein, I. (1974). El Moderno Sistema Mundial.</td><td>Clasificacion Core/Semiperiferia/Periferia y reglas de movilidad.</td></tr>
+<tr><td>Sociologia</td><td>Gramsci, A. (1929). Cuadernos de la Carcel.</td><td>Mecanica de hegemonia cultural (inversion de aristas por consenso).</td></tr>
+<tr><td>Sistemas</td><td>Meadows, D. (1972). Los Limites del Crecimiento.</td><td>Limites maximos de recursos para evitar crecimiento infinito.</td></tr>
+<tr><td>Politica</td><td>Lenin, V. (1917). El Imperialismo.</td><td>Mecanica de exportacion de capital a Periferias.</td></tr>
+</tbody>
+</table>
+
+<div class="body-text">
+Estas fuentes no son meramente decorativas: cada ecuacion del juego se deriva directamente de los conceptos teoricos de estos autores. El Class Struggle Index es una formalizacion computacional de la plusvalia marxista; la Dependency Ratio traduce la teoria de la dependencia de Wallerstein a un indicador numerico; y el Sistema de Utilidad de los NPCs refleja los principios de racionalidad acotada de la economia neoclasica.
+</div>
+"""
+    return build_section("13", "Seccion 13", "Bibliografia Completa", "Fuentes teoricas y su aplicacion en el juego", content)
+
+
+def section_14():
+    content = """
+<div class="body-text">
+El desarrollo de Hegemonia se estructura en cinco fases secuenciales, cada una construyendo sobre los logros de la anterior. El equipo debe completar cada fase antes de avanzar a la siguiente, garantizando que los fundamentos del simulador esten solidos antes de anadir capas de complejidad.
+</div>
+
+<div class="sub-header">Fases de Desarrollo</div>
+
+<div class="phase-item">
+    <div class="phase-num">1</div>
+    <div class="phase-content">
+        <div class="phase-name">Fase 1: Motor</div>
+        <div class="phase-desc">Implementar las clases Node, Edge y GraphManager con las formulas exactas de produccion y flujo. Crear el bucle de ticks basico sin IA ni interfaz grafica. Validar que los numeros producen resultados coherentes.</div>
+    </div>
+</div>
+
+<div class="phase-item">
+    <div class="phase-num">2</div>
+    <div class="phase-content">
+        <div class="phase-name">Fase 2: Logica</div>
+        <div class="phase-desc">Codificar el GameLoop respetando el orden de los 8 pasos. Integrar el WallersteinClassifier y el sistema de crisis. Probar emergencias y verificar que hegemonias y revoluciones ocurren organicamente.</div>
+    </div>
+</div>
+
+<div class="phase-item">
+    <div class="phase-num">3</div>
+    <div class="phase-content">
+        <div class="phase-name">Fase 3: IA</div>
+        <div class="phase-desc">Construir el sistema de utilidad para los NPCs usando los pesos de la Seccion 7. Entrenar y ajustar los parametros para que cada ideologia exhiba comportamiento diferenciado y coherente.</div>
+    </div>
+</div>
+
+<div class="phase-item">
+    <div class="phase-num">4</div>
+    <div class="phase-content">
+        <div class="phase-name">Fase 4: UI</div>
+        <div class="phase-desc">Conectar la vista 3D (Unity/Godot) con los datos del grafo. Implementar tooltips, sliders y botones de accion especial. Crear el HUD con log de eventos y metricas globales.</div>
+    </div>
+</div>
+
+<div class="phase-item">
+    <div class="phase-num">5</div>
+    <div class="phase-content">
+        <div class="phase-name">Fase 5: Cientifica</div>
+        <div class="phase-desc">Conectar el DataLogger para que exporte los archivos CSV/JSON al finalizar la partida. Implementar los graficos post-partida (Sankey, linea de tiempo de centralidad).</div>
+    </div>
+</div>
+"""
+    return build_section("14", "Seccion 14", "Instrucciones Finales", "Roadmap de desarrollo para el equipo", content)
+
+
+# ─── MAIN ─────────────────────────────────────────────────────────────────────
+
+def build_full_html():
+    css = build_css()
+    cover = build_cover()
+    toc = build_toc()
+
+    body_content = "\n".join([
+        section_01(),
+        section_02(),
+        section_03(),
+        section_04(),
+        section_05(),
+        section_06(),
+        section_07(),
+        section_08(),
+        section_09(),
+        section_10(),
+        section_11(),
+        section_12(),
+        section_13(),
+        section_14(),
+    ])
+
+    html = f"""<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=720, initial-scale=1.0">
+    <title>Hegemonia: El Grafo de los Mundos - GDD v2.0</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+{css}
+    </style>
+</head>
+<body>
+{cover}
+<div class="main-content">
+{toc}
+{body_content}
+</div>
+</body>
+</html>"""
+    return html
+
+
+if __name__ == "__main__":
+    html_content = build_full_html()
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    with open(OUTPUT_HTML, "w", encoding="utf-8") as f:
+        f.write(html_content)
+    print(f"HTML generated: {OUTPUT_HTML}")
+    print(f"Size: {len(html_content):,} bytes")
