@@ -1,0 +1,564 @@
+    50→    50→    50→        <div className="text-[10px] uppercase tracking-wider text-slate-500 font-mono">{label}</div>
+    51→    51→    51→        <div className="text-lg font-bold text-white font-mono leading-tight">{value}</div>
+    52→    52→    52→        {sub && <div className="text-[10px] text-slate-500 font-mono">{sub}</div>}
+    53→    53→    53→      </div>
+    54→    54→    54→    </div>
+    55→    55→    55→  );
+    56→    56→    56→}
+    57→    57→    57→
+    58→    58→    58→// ─── Panel wrapper ───
+    59→    59→    59→function Panel({ title, icon: Icon, children, className }: {
+    60→    60→    60→  title: string; icon: React.ElementType; children: React.ReactNode; className?: string;
+    61→    61→    61→}) {
+    62→    62→    62→  return (
+    63→    63→    63→    <div className={`bg-[#111827] border border-slate-800/50 rounded-lg overflow-hidden ${className ?? ""}`}>
+    64→    64→    64→      <div className="px-4 py-2.5 border-b border-slate-800/50 flex items-center gap-2">
+    65→    65→    65→        <Icon className="w-3.5 h-3.5 text-cyan-400" />
+    66→    66→    66→        <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wider font-mono">{title}</h3>
+    67→    67→    67→      </div>
+    68→    68→    68→      {children}
+    69→    69→    69→    </div>
+    70→    70→    70→  );
+    71→    71→    71→}
+    72→    72→    72→
+    73→    73→    73→// ─── GRAPH VIEW ───
+    74→    74→    74→function GraphView() {
+    75→    75→    75→  const svgRef = useRef<SVGSVGElement>(null);
+    76→    76→    76→  const [hoveredNode, setHoveredNode] = useState<string | null>(null);
+    77→    77→    77→  const [viewBox, setViewBox] = useState("-5 -5 110 90");
+    78→    78→    78→  const [isDragging, setIsDragging] = useState(false);
+    79→    79→    79→  const dragStart = useRef({ x: 0, y: 0 });
+    80→    80→    80→  const vbStart = useRef({ x: -5, y: -5 });
+    81→    81→    81→
+    82→    82→    82→  const nations = useHegemoniaStore((s) => s.nations);
+    83→    83→    83→  const edges = useHegemoniaStore((s) => s.edges);
+    84→    84→    84→  const selectedNationId = useHegemoniaStore((s) => s.selectedNationId);
+    85→    85→    85→  const setSelectedNation = useHegemoniaStore((s) => s.setSelectedNation);
+    86→    86→    86→
+    87→    87→    87→  const maxVolume = useMemo(() => Math.max(1, ...edges.map((e) => e.volume)), [edges]);
+    88→    88→    88→
+    89→    89→    89→  const handleWheel = useCallback((e: React.WheelEvent) => {
+    90→    90→    90→    e.preventDefault();
+    91→    91→    91→    const [vx, vy, vw, vh] = viewBox.split(" ").map(Number);
+    92→    92→    92→    const svg = svgRef.current;
+    93→    93→    93→    if (!svg) return;
+    94→    94→    94→    const rect = svg.getBoundingClientRect();
+    95→    95→    95→    const mx = ((e.clientX - rect.left) / rect.width) * vw + vx;
+    96→    96→    96→    const my = ((e.clientY - rect.top) / rect.height) * vh + vy;
+    97→    97→    97→    const f = e.deltaY > 0 ? 1.1 : 0.9;
+    98→    98→    98→    const nvw = Math.max(30, Math.min(130, vw * f));
+    99→    99→    99→    const nvh = nvw * (vh / vw);
+   100→   100→   100→    const r = nvw / vw;
+   101→   101→   101→    setViewBox(`${(mx - (mx - vx) * r).toFixed(1)} ${(my - (my - vy) * r).toFixed(1)} ${nvw.toFixed(1)} ${nvh.toFixed(1)}`);
+   102→   102→   102→  }, [viewBox]);
+   103→   103→   103→
+   104→   104→   104→  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+   105→   105→   105→    if ((e.target as Element).closest(".gn")) return;
+   106→   106→   106→    setIsDragging(true);
+   107→   107→   107→    dragStart.current = { x: e.clientX, y: e.clientY };
+   108→   108→   108→    const [vx, vy] = viewBox.split(" ").map(Number);
+   109→   109→   109→    vbStart.current = { x: vx, y: vy };
+   110→   110→   110→  }, [viewBox]);
+   111→   111→   111→
+   112→   112→   112→  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+   113→   113→   113→    if (!isDragging) return;
+   114→   114→   114→    const svg = svgRef.current;
+   115→   115→   115→    if (!svg) return;
+   116→   116→   116→    const rect = svg.getBoundingClientRect();
+   117→   117→   117→    const [vw] = viewBox.split(" ").map(Number);
+   118→   118→   118→    const sx = vw / rect.width;
+   119→   119→   119→    const sy = sx;
+   120→   120→   120→    const [, , , vh] = viewBox.split(" ").map(Number);
+   121→   121→   121→    setViewBox(`${(vbStart.current.x - (e.clientX - dragStart.current.x) * sx).toFixed(1)} ${(vbStart.current.y - (e.clientY - dragStart.current.y) * sy).toFixed(1)} ${vw} ${vh}`);
+   122→   122→   122→  }, [isDragging, viewBox]);
+   123→   123→   123→
+   124→   124→   124→  const highlightNode = selectedNationId || hoveredNode;
+   125→   125→   125→
+   126→   126→   126→  return (
+   127→   127→   127→    <div className="relative w-full h-full min-h-[400px] bg-[#070b14] rounded-lg overflow-hidden border border-slate-800/50">
+   128→   128→   128→      <svg className="absolute inset-0 w-full h-full opacity-[0.04] pointer-events-none">
+   129→   129→   129→        <defs><pattern id="grid" width="5" height="5" patternUnits="userSpaceOnUse"><path d="M 5 0 L 0 0 0 5" fill="none" stroke="#06b6d4" strokeWidth="0.15" /></pattern></defs>
+   130→   130→   130→        <rect width="100%" height="100%" fill="url(#grid)" />
+   131→   131→   131→      </svg>
+   132→   132→   132→      <div className="absolute top-3 left-4 z-10 flex items-center gap-2">
+   133→   133→   133→        <div className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+   134→   134→   134→        <span className="text-xs font-mono text-cyan-400/70 uppercase tracking-wider">Grafo Mundial — {nations.length} nodos, {edges.length} aristas</span>
+   135→   135→   135→      </div>
+   136→   136→   136→      <div className="absolute top-3 right-3 z-10 flex flex-col gap-1.5 bg-black/40 backdrop-blur-sm rounded px-3 py-2 border border-slate-800/30">
+   137→   137→   137→        {(["core", "semi", "periphery"] as const).map((c) => (
+   138→   138→   138→          <div key={c} className="flex items-center gap-2">
+   139→   139→   139→            <div className="w-2.5 h-2.5 rounded-full" style={{ background: classColor(c) }} />
+   140→   140→   140→            <span className="text-[10px] text-slate-400">{classLabel(c)}</span>
+   141→   141→   141→          </div>
+   142→   142→   142→        ))}
+   143→   143→   143→      </div>
+   144→   144→   144→
+   145→   145→   145→      <svg ref={svgRef} viewBox={viewBox} className="w-full h-full cursor-grab active:cursor-grabbing"
+   146→   146→   146→        onWheel={handleWheel} onMouseDown={handleMouseDown} onMouseMove={handleMouseMove}
+   147→   147→   147→        onMouseUp={() => setIsDragging(false)} onMouseLeave={() => setIsDragging(false)}
+   148→   148→   148→        onClick={(e) => { if (!(e.target as Element).closest(".gn")) setSelectedNation(null); }}
+   149→   149→   149→        style={{ touchAction: "none" }}>
+   150→   150→   150→        <defs>
+   151→   151→   151→          <filter id="gc" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="2" result="b" /><feFlood floodColor="#06b6d4" floodOpacity="0.6" result="c" /><feComposite in="c" in2="b" operator="in" result="g" /><feMerge><feMergeNode in="g" /><feMergeNode in="SourceGraphic" /></feMerge></filter>
+   152→   152→   152→          <filter id="gs" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="1.5" result="b" /><feFlood floodColor="#f59e0b" floodOpacity="0.5" result="c" /><feComposite in="c" in2="b" operator="in" result="g" /><feMerge><feMergeNode in="g" /><feMergeNode in="SourceGraphic" /></feMerge></filter>
+   153→   153→   153→          <filter id="gk" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="3" result="b" /><feFlood floodColor="#06b6d4" floodOpacity="0.8" result="c" /><feComposite in="c" in2="b" operator="in" result="g" /><feMerge><feMergeNode in="g" /><feMergeNode in="SourceGraphic" /></feMerge></filter>
+   154→   154→   154→        </defs>
+   155→   155→   155→
+   156→   156→   156→        {/* Edges */}
+   157→   157→   157→        {edges.map((e, i) => {
+   158→   158→   158→          const from = nations.find((n) => n.id === e.from);
+   159→   159→   159→          const to = nations.find((n) => n.id === e.to);
+   160→   160→   160→          if (!from || !to) return null;
+   161→   161→   161→          const isHi = highlightNode ? (e.from === highlightNode || e.to === highlightNode) : false;
+   162→   162→   162→          const op = highlightNode ? (isHi ? 0.7 : 0.05) : 0.15 + (e.volume / maxVolume) * 0.25;
+   163→   163→   163→          const sc = isHi ? (e.type === "raw" ? "#10b981" : e.type === "manufactured" ? "#06b6d4" : "#a855f7") : "#334155";
+   164→   164→   164→          return (
+   165→   165→   165→            <line key={i} x1={from.x} y1={from.y} x2={to.x} y2={to.y}
+   166→   166→   166→              stroke={sc} strokeWidth={isHi ? Math.min(3, e.volume / 100) * 1.5 : Math.min(3, e.volume / 100)}
+   167→   167→   167→              opacity={op} strokeLinecap="round">
+   168→   168→   168→              {isHi && <animate attributeName="stroke-dasharray" values="2 6;6 2;2 6" dur="2s" repeatCount="indefinite" />}
+   169→   169→   169→            </line>
+   170→   170→   170→          );
+   171→   171→   171→        })}
+   172→   172→   172→
+   173→   173→   173→        {/* Nodes */}
+   174→   174→   174→        {nations.map((n) => {
+   175→   175→   175→          const r = Math.max(3, 3 + (n.gdp / 4.5) * 7);
+   176→   176→   176→          const isSel = n.id === selectedNationId;
+   177→   177→   177→          const isHov = n.id === hoveredNode;
+   178→   178→   178→          const isConn = highlightNode && edges.some((e) => (e.from === highlightNode && e.to === n.id) || (e.to === highlightNode && e.from === n.id));
+   179→   179→   179→          const dimmed = highlightNode && !isSel && !isConn && n.id !== highlightNode;
+   180→   180→   180→          const color = classColor(n.worldClass);
+   181→   181→   181→          return (
+   182→   182→   182→            <g key={n.id} className="gn" transform={`translate(${n.x},${n.y})`} opacity={dimmed ? 0.15 : 1}
+   183→   183→   183→              style={{ cursor: "pointer" }}
+   184→   184→   184→              onClick={(ev) => { ev.stopPropagation(); setSelectedNation(isSel ? null : n.id); }}
+   185→   185→   185→              onMouseEnter={() => setHoveredNode(n.id)} onMouseLeave={() => setHoveredNode(null)}>
+   186→   186→   186→              {isSel && <circle r={r + 4} fill="none" stroke={color} strokeWidth="1.5" opacity="0.4"><animate attributeName="r" values={`${r + 3};${r + 6};${r + 3}`} dur="2s" repeatCount="indefinite" /><animate attributeName="opacity" values="0.4;0.15;0.4" dur="2s" repeatCount="indefinite" /></circle>}
+   187→   187→   187→              <circle r={r} fill={color} opacity={isSel || isHov ? 1 : 0.75}
+   188→   188→   188→                filter={isSel ? "url(#gk)" : n.worldClass === "core" ? "url(#gc)" : n.worldClass === "semi" ? "url(#gs)" : undefined} />
+   189→   189→   189→              <circle r={r * 0.4} fill="white" opacity={isSel ? 0.6 : 0.3} />
+   190→   190→   190→              <text y={r + 3} textAnchor="middle" fill={dimmed ? "#475569" : isSel ? "#e2e8f0" : "#94a3b8"} fontSize="1.8" fontFamily="monospace" fontWeight={isSel ? 600 : 400}>
+   191→   191→   191→                {n.flag} {n.name.length > 12 ? n.name.slice(0, 10) + "…" : n.name}
+   192→   192→   192→              </text>
+   193→   193→   193→              {isHov && !isSel && (
+   194→   194→   194→                <g transform={`translate(0,${-r - 6})`}>
+   195→   195→   195→                  <rect x={-30} y={-14} width={60} height={14} rx={3} fill="rgba(15,23,42,0.9)" stroke={color} strokeWidth={0.5} />
+   196→   196→   196→                  <text textAnchor="middle" y={-4} fill="#e2e8f0" fontSize="2.2" fontFamily="monospace" fontWeight={600}>GDP: {n.gdp.toFixed(1)}B</text>
+   197→   197→   197→                </g>
+   198→   198→   198→              )}
+   199→   199→   199→            </g>
+   200→   200→   200→          );
+   201→   201→   201→        })}
+   202→   202→   202→      </svg>
+   203→   203→   203→      <div className="absolute bottom-3 left-4 text-[10px] text-slate-600 font-mono">Scroll: zoom · Drag: pan · Click: select</div>
+   204→   204→   204→    </div>
+   205→   205→   205→  );
+   206→   206→   206→}
+   207→   207→   207→
+   208→   208→   208→// ─── GDP Chart ───
+   209→   209→   209→function GDPChart({ nations }: { nations: NationNode[] }) {
+   210→   210→   210→  const top = useMemo(() => [...nations].sort((a, b) => b.gdp - a.gdp).slice(0, 10), [nations]);
+   211→   211→   211→  const data = top.map((n) => ({ name: n.flag + " " + n.name, gdp: Math.round(n.gdp * 100) / 100, fill: classColor(n.worldClass) }));
+   212→   212→   212→  return (
+   213→   213→   213→    <ResponsiveContainer width="100%" height={220}>
+   214→   214→   214→      <BarChart data={data} layout="vertical" margin={{ left: 5, right: 20, top: 5, bottom: 5 }}>
+   215→   215→   215→        <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" horizontal={false} />
+   216→   216→   216→        <XAxis type="number" tick={{ fontSize: 10, fill: "#64748b" }} axisLine={{ stroke: "#334155" }} />
+   217→   217→   217→        <YAxis type="category" dataKey="name" width={110} tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} />
+   218→   218→   218→        <Tooltip contentStyle={{ background: "#1e293b", border: "1px solid #334155", borderRadius: 8, fontSize: 11 }} labelStyle={{ color: "#e2e8f0" }} formatter={(v: number) => [`${v.toFixed(1)}B`, "GDP"]} />
+   219→   219→   219→        <Bar dataKey="gdp" radius={[0, 4, 4, 0]}>
+   220→   220→   220→          {data.map((d, i) => <Cell key={i} fill={d.fill} />)}
+   221→   221→   221→        </Bar>
+   222→   222→   222→      </BarChart>
+   223→   223→   223→    </ResponsiveContainer>
+   224→   224→   224→  );
+   225→   225→   225→}
+   226→   226→   226→
+   227→   227→   227→// ─── Temporal Chart ───
+   228→   228→   228→function TemporalChart() {
+   229→   229→   229→  const hist = useHegemoniaStore((s) => s.historicalGDP);
+   230→   230→   230→  const tracked = ["gb", "fr", "de", "us", "ru", "cn"];
+   231→   231→   231→  const colors: Record<string, string> = { gb: "#06b6d4", fr: "#3b82f6", de: "#f59e0b", us: "#10b981", ru: "#ef4444", cn: "#a855f7" };
+   232→   232→   232→  const names: Record<string, string> = { gb: "GB", fr: "FR", de: "DE", us: "US", ru: "RU", cn: "CN" };
+   233→   233→   233→  const data = hist.map((h) => ({ ...h, label: `${h.year}` }));
+   234→   234→   234→  if (data.length < 2) {
+   235→   235→   235→    return <div className="flex items-center justify-center h-full text-slate-600 text-xs">Avanza 2+ turnos para ver la gráfica</div>;
+   236→   236→   236→  }
+   237→   237→   237→  return (
+   238→   238→   238→    <ResponsiveContainer width="100%" height={200}>
+   239→   239→   239→      <LineChart data={data} margin={{ left: -20, right: 10, top: 5, bottom: 5 }}>
+   240→   240→   240→        <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+   241→   241→   241→        <XAxis dataKey="label" tick={{ fontSize: 9, fill: "#64748b" }} axisLine={{ stroke: "#334155" }} />
+   242→   242→   242→        <YAxis tick={{ fontSize: 9, fill: "#64748b" }} axisLine={{ stroke: "#334155" }} />
+   243→   243→   243→        <Tooltip contentStyle={{ background: "#1e293b", border: "1px solid #334155", borderRadius: 8, fontSize: 10 }} labelStyle={{ color: "#e2e8f0" }} />
+   244→   244→   244→        {tracked.map((id) => <Line key={id} type="monotone" dataKey={id} stroke={colors[id]} strokeWidth={1.5} dot={false} name={names[id]} />)}
+   245→   245→   245→      </LineChart>
+   246→   246→   246→    </ResponsiveContainer>
+   247→   247→   247→  );
+   248→   248→   248→}
+   249→   249→   249→
+   250→   250→   250→// ─── Distribution Donut ───
+   251→   251→   251→function DistributionChart({ core, semi, periphery }: { core: number; semi: number; periphery: number }) {
+   252→   252→   252→  const data = [{ name: "Core", value: core, color: "#06b6d4" }, { name: "Semi", value: semi, color: "#f59e0b" }, { name: "Periferia", value: periphery, color: "#64748b" }];
+   253→   253→   253→  return (
+   254→   254→   254→    <ResponsiveContainer width="100%" height={200}>
+   255→   255→   255→      <PieChart>
+   256→   256→   256→        <Pie data={data} cx="50%" cy="50%" innerRadius={45} outerRadius={70} paddingAngle={3} dataKey="value">
+   257→   257→   257→          {data.map((e, i) => <Cell key={i} fill={e.color} stroke="none" />)}
+   258→   258→   258→        </Pie>
+   259→   259→   259→        <Tooltip contentStyle={{ background: "#1e293b", border: "1px solid #334155", borderRadius: 8, fontSize: 11 }} labelStyle={{ color: "#e2e8f0" }} />
+   260→   260→   260→        <Legend verticalAlign="bottom" iconType="circle" iconSize={8} formatter={(v: string) => <span className="text-slate-400 text-[10px]">{v}</span>} />
+   261→   261→   261→      </PieChart>
+   262→   262→   262→    </ResponsiveContainer>
+   263→   263→   263→  );
+   264→   264→   264→}
+   265→   265→   265→
+   266→   266→   266→// ─── Power Radar ───
+   267→   267→   267→function PowerRadar({ nation }: { nation: NationNode }) {
+   268→   268→   268→  const data = [
+   269→   269→   269→    { dim: "Militar", val: nation.militaryPower },
+   270→   270→   270→    { dim: "Económico", val: Math.round((nation.gdp / 4.5) * 100) },
+   271→   271→   271→    { dim: "Cultural", val: nation.culturalPower },
+   272→   272→   272→    { dim: "Diplomático", val: nation.diplomaticPower },
+   273→   273→   273→    { dim: "Centralidad", val: Math.round(nation.eigenvectorCentrality * 100) },
+   274→   274→   274→  ];
+   275→   275→   275→  return (
+   276→   276→   276→    <ResponsiveContainer width="100%" height={200}>
+   277→   277→   277→      <RadarChart data={data} cx="50%" cy="50%" outerRadius="70%">
+   278→   278→   278→        <PolarGrid stroke="#334155" />
+   279→   279→   279→        <PolarAngleAxis dataKey="dim" tick={{ fontSize: 9, fill: "#94a3b8" }} />
+   280→   280→   280→        <PolarRadiusAxis tick={false} axisLine={false} domain={[0, 100]} />
+   281→   281→   281→        <Radar dataKey="val" stroke={classColor(nation.worldClass)} fill={classColor(nation.worldClass)} fillOpacity={0.2} strokeWidth={1.5} />
+   282→   282→   282→      </RadarChart>
+   283→   283→   283→    </ResponsiveContainer>
+   284→   284→   284→  );
+   285→   285→   285→}
+   286→   286→   286→
+   287→   287→   287→// ─── Rankings ───
+   288→   288→   288→function RankingsPanel() {
+   289→   289→   289→  const nations = useHegemoniaStore((s) => s.nations);
+   290→   290→   290→  const setSelected = useHegemoniaStore((s) => s.setSelectedNation);
+   291→   291→   291→  const rankings = useMemo(() => [...nations].sort((a, b) => b.eigenvectorCentrality - a.eigenvectorCentrality).slice(0, 8), [nations]);
+   292→   292→   292→  return (
+   293→   293→   293→    <div className="divide-y divide-slate-800/50 max-h-[260px] overflow-y-auto heg-scroll">
+   294→   294→   294→      {rankings.map((n, i) => (
+   295→   295→   295→        <button key={n.id} onClick={() => setSelected(n.id)} className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-800/30 transition-colors text-left">
+   296→   296→   296→          <span className={`text-[10px] font-mono w-5 text-center font-bold ${i < 3 ? "text-cyan-400" : "text-slate-600"}`}>{i + 1}</span>
+   297→   297→   297→          <span className="text-sm">{n.flag}</span>
+   298→   298→   298→          <span className="text-xs text-slate-300 flex-1 truncate">{n.name}</span>
+   299→   299→   299→          <span className="text-[10px] px-1.5 py-0.5 rounded font-mono font-medium" style={{ background: classBgColor(n.worldClass), color: classColor(n.worldClass) }}>{classLabel(n.worldClass).slice(0, 4)}</span>
+   300→   300→   300→          <span className="text-[10px] text-cyan-400 font-mono w-12 text-right">{n.eigenvectorCentrality.toFixed(2)}</span>
+   301→   301→   301→        </button>
+   302→   302→   302→      ))}
+   303→   303→   303→    </div>
+   304→   304→   304→  );
+   305→   305→   305→}
+   306→   306→   306→
+   307→   307→   307→// ─── Event Log ───
+   308→   308→   308→function EventLog() {
+   309→   309→   309→  const events = useHegemoniaStore((s) => s.events);
+   310→   310→   310→  const recentEvents = useMemo(() => events.slice(-25).reverse(), [events]);
+   311→   311→   311→  return (
+   312→   312→   312→    <div className="max-h-[220px] overflow-y-auto heg-scroll">
+   313→   313→   313→      <AnimatePresence initial={false}>
+   314→   314→   314→        {recentEvents.map((ev, i) => (
+   315→   315→   315→          <motion.div key={ev.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: Math.min(i * 0.02, 0.3) }}
+   316→   316→   316→            className="flex items-start gap-2 px-3 py-2 border-b border-slate-800/30 hover:bg-slate-800/20">
+   317→   317→   317→            <span className="text-sm mt-px">{eventIcon(ev.type)}</span>
+   318→   318→   318→            <div className="flex-1 min-w-0">
+   319→   319→   319→              <p className="text-[11px] text-slate-300 leading-relaxed">{ev.text}</p>
+   320→   320→   320→              <div className="flex items-center gap-2 mt-0.5">
+   321→   321→   321→                <span className="text-[9px] text-slate-600 font-mono">T{ev.turn}</span>
+   322→   322→   322→                <span className="text-[9px] font-mono" style={{ color: eventColor(ev.type) }}>{ev.type.toUpperCase()}</span>
+   323→   323→   323→              </div>
+   324→   324→   324→            </div>
+   325→   325→   325→          </motion.div>
+   326→   326→   326→        ))}
+   327→   327→   327→      </AnimatePresence>
+   328→   328→   328→      {recentEvents.length === 0 && <div className="p-4 text-center text-slate-600 text-xs">Avanza un turno para ver eventos</div>}
+   329→   329→   329→    </div>
+   330→   330→   330→  );
+   331→   331→   331→}
+   332→   332→   332→
+   333→   333→   333→// ─── Node Detail ───
+   334→   334→   334→function NodeDetail() {
+   335→   335→   335→  const nations = useHegemoniaStore((s) => s.nations);
+   336→   336→   336→  const edges = useHegemoniaStore((s) => s.edges);
+   337→   337→   337→  const selectedId = useHegemoniaStore((s) => s.selectedNationId);
+   338→   338→   338→  const nation = useMemo(() => nations.find((n) => n.id === selectedId), [nations, selectedId]);
+   339→   339→   339→  if (!nation) return <div className="flex items-center justify-center h-full text-slate-600 text-xs">Selecciona un nodo del grafo</div>;
+   340→   340→   340→  const topPartners = getTopPartners(nation.id, edges, 5);
+   341→   341→   341→  const socialTotal = nation.socialClasses.elite + nation.socialClasses.middle + nation.socialClasses.working + nation.socialClasses.peasant;
+   342→   342→   342→  const ideoInfo = IDEOLOGY_INFO[nation.ideology];
+   343→   343→   343→
+   344→   344→   344→  return (
+   345→   345→   345→    <div className="p-4 space-y-4 overflow-y-auto heg-scroll h-full">
+   346→   346→   346→      <div className="flex items-center gap-3">
+   347→   347→   347→        <span className="text-2xl">{nation.flag}</span>
+   348→   348→   348→        <div>
+   349→   349→   349→          <h3 className="text-sm font-bold text-white">{nation.name}</h3>
+   350→   350→   350→          <div className="flex items-center gap-2 mt-0.5">
+   351→   351→   351→            <span className="text-[10px] px-1.5 py-0.5 rounded font-mono font-medium" style={{ background: classBgColor(nation.worldClass), color: classColor(nation.worldClass) }}>{classLabel(nation.worldClass)}</span>
+   352→   352→   352→            <span className="text-[10px] px-1.5 py-0.5 rounded font-mono" style={{ background: ideoInfo.color + "20", color: ideoInfo.color }}>{ideoInfo.icon} {ideoInfo.name}</span>
+   353→   353→   353→          </div>
+   354→   354→   354→        </div>
+   355→   355→   355→      </div>
+   356→   356→   356→
+   357→   357→   357→      <div className="grid grid-cols-2 gap-2">
+   358→   358→   358→        {[
+   359→   359→   359→          { l: "GDP", v: `$${nation.gdp.toFixed(2)}B`, c: "text-white" },
+   360→   360→   360→          { l: "Población", v: `${nation.population}M`, c: "text-white" },
+   361→   361→   361→          { l: "Balanza", v: `${nation.tradeBalance >= 0 ? "+" : ""}${nation.tradeBalance}M`, c: nation.tradeBalance >= 0 ? "text-emerald-400" : "text-red-400" },
+   362→   362→   362→          { l: "Centralidad", v: nation.eigenvectorCentrality.toFixed(3), c: "text-cyan-400" },
+   363→   363→   363→          { l: "Estabilidad", v: `${nation.stability.toFixed(0)}%`, c: nation.stability > 50 ? "text-emerald-400" : "text-red-400" },
+   364→   364→   364→          { l: "Industria", v: `${nation.industrialization.toFixed(0)}%`, c: "text-amber-400" },
+   365→   365→   365→        ].map((s, i) => (
+   366→   366→   366→          <div key={i} className="bg-slate-900/50 rounded p-2">
+   367→   367→   367→            <div className="text-[9px] uppercase text-slate-600 font-mono">{s.l}</div>
+   368→   368→   368→            <div className={`text-sm font-bold font-mono ${s.c}`}>{s.v}</div>
+   369→   369→   369→          </div>
+   370→   370→   370→        ))}
+   371→   371→   371→      </div>
+   372→   372→   372→
+   373→   373→   373→      <div>
+   374→   374→   374→        <div className="text-[10px] uppercase text-slate-500 font-mono mb-2">Estructura Social</div>
+   375→   375→   375→        <div className="flex rounded-full overflow-hidden h-2">
+   376→   376→   376→          {[
+   377→   377→   377→            { pct: nation.socialClasses.elite / socialTotal, color: "#a855f7" },
+   378→   378→   378→            { pct: nation.socialClasses.middle / socialTotal, color: "#06b6d4" },
+   379→   379→   379→            { pct: nation.socialClasses.working / socialTotal, color: "#f59e0b" },
+   380→   380→   380→            { pct: nation.socialClasses.peasant / socialTotal, color: "#64748b" },
+   381→   381→   381→          ].map((seg, i) => <div key={i} className="h-full" style={{ width: `${seg.pct * 100}%`, background: seg.color }} />)}
+   382→   382→   382→        </div>
+   383→   383→   383→        <div className="flex justify-between mt-1">
+   384→   384→   384→          {[
+   385→   385→   385→            { l: "Elite", v: nation.socialClasses.elite, c: "#a855f7" },
+   386→   386→   386→            { l: "Media", v: nation.socialClasses.middle, c: "#06b6d4" },
+   387→   387→   387→            { l: "Obrera", v: nation.socialClasses.working, c: "#f59e0b" },
+   388→   388→   388→            { l: "Camp.", v: nation.socialClasses.peasant, c: "#64748b" },
+   389→   389→   389→          ].map((s, i) => <span key={i} className="text-[9px] font-mono" style={{ color: s.c }}>{s.v}%</span>)}
+   390→   390→   390→        </div>
+   391→   391→   391→      </div>
+   392→   392→   392→
+   393→   393→   393→      <PowerRadar nation={nation} />
+   394→   394→   394→
+   395→   395→   395→      <div>
+   396→   396→   396→        <div className="text-[10px] uppercase text-slate-500 font-mono mb-2">Top Socios Comerciales</div>
+   397→   397→   397→        <div className="space-y-1">
+   398→   398→   398→          {topPartners.map((tp, i) => {
+   399→   399→   399→            const partner = nations.find((n) => n.id === tp.partnerId);
+   400→   400→   400→            return (
+   401→   401→   401→              <div key={i} className="flex items-center gap-2 text-[11px]">
+   402→   402→   402→                <span className="text-xs">{partner?.flag ?? "🏳️"}</span>
+   403→   403→   403→                <span className="text-slate-400 flex-1 truncate">{partner?.name ?? tp.partnerId}</span>
+   404→   404→   404→                <span className={`font-mono ${tp.direction === "out" ? "text-red-400" : "text-emerald-400"}`}>{tp.direction === "out" ? "→" : "←"} {tp.volume.toFixed(0)}</span>
+   405→   405→   405→              </div>
+   406→   406→   406→            );
+   407→   407→   407→          })}
+   408→   408→   408→        </div>
+   409→   409→   409→      </div>
+   410→   410→   410→
+   411→   411→   411→      <div>
+   412→   412→   412→        <div className="text-[10px] uppercase text-slate-500 font-mono mb-2">Recursos</div>
+   413→   413→   413→        <div className="grid grid-cols-2 gap-x-3 gap-y-1">
+   414→   414→   414→          {[
+   415→   415→   415→            { name: "Carbón", val: nation.resources.coal, color: "#64748b" },
+   416→   416→   416→            { name: "Hierro", val: nation.resources.iron, color: "#94a3b8" },
+   417→   417→   417→            { name: "Grano", val: nation.resources.grain, color: "#f59e0b" },
+   418→   418→   418→            { name: "Algodón", val: nation.resources.cotton, color: "#e2e8f0" },
+   419→   419→   419→          ].map((r, i) => (
+   420→   420→   420→            <div key={i} className="flex items-center gap-2">
+   421→   421→   421→              <span className="text-[10px] text-slate-500 w-12">{r.name}</span>
+   422→   422→   422→              <div className="flex-1 h-1.5 bg-slate-800 rounded-full overflow-hidden">
+   423→   423→   423→                <div className="h-full rounded-full" style={{ width: `${r.val}%`, background: r.color }} />
+   424→   424→   424→              </div>
+   425→   425→   425→              <span className="text-[10px] font-mono text-slate-400 w-6 text-right">{r.val.toFixed(0)}</span>
+   426→   426→   426→            </div>
+   427→   427→   427→          ))}
+   428→   428→   428→        </div>
+   429→   429→   429→      </div>
+   430→   430→   430→    </div>
+   431→   431→   431→  );
+   432→   432→   432→}
+   433→   433→   433→
+   434→   434→   434→// ─── Ideologies Panel ───
+   435→   435→   435→function IdeologiesPanel() {
+   436→   436→   436→  const counts = useHegemoniaStore((s) => s.ideologyCounts);
+   437→   437→   437→  return (
+   438→   438→   438→    <div className="flex-1 p-3 space-y-2 overflow-y-auto heg-scroll">
+   439→   439→   439→      {counts.map((ideo, i) => (
+   440→   440→   440→        <div key={i} className="flex items-center gap-2 p-2 rounded bg-slate-900/40 border border-slate-800/30">
+   441→   441→   441→          <span className="text-lg">{ideo.icon}</span>
+   442→   442→   442→          <div className="flex-1 min-w-0">
+   443→   443→   443→            <div className="flex items-center gap-2">
+   444→   444→   444→              <span className="text-xs text-white font-medium">{ideo.name}</span>
+   445→   445→   445→              <span className="text-[10px] px-1.5 py-0.5 rounded font-mono" style={{ background: ideo.color + "20", color: ideo.color }}>{ideo.count}</span>
+   446→   446→   446→            </div>
+   447→   447→   447→            <p className="text-[10px] text-slate-500 truncate">{ideo.desc}</p>
+   448→   448→   448→          </div>
+   449→   449→   449→        </div>
+   450→   450→   450→      ))}
+   451→   451→   451→    </div>
+   452→   452→   452→  );
+   453→   453→   453→}
+   454→   454→   454→
+   455→   455→   455→// ═══════════════════════════════════════════════════════════
+   456→   456→   456→// MAIN DASHBOARD — CONNECTED TO ENGINE
+   457→   457→   457→// ═══════════════════════════════════════════════════════════
+   458→   458→   458→export default function Home() {
+   459→   459→   459→  const gameState = useHegemoniaStore((s) => s.gameState);
+   460→   460→   460→  const nations = useHegemoniaStore((s) => s.nations);
+   461→   461→   461→  const activeTab = useHegemoniaStore((s) => s.activeTab);
+   462→   462→   462→  const setActiveTab = useHegemoniaStore((s) => s.setActiveTab);
+   463→   463→   463→  const runNextTurn = useHegemoniaStore((s) => s.runNextTurn);
+   464→   464→   464→  const runNextPhase = useHegemoniaStore((s) => s.runNextPhase);
+   465→   465→   465→  const togglePause = useHegemoniaStore((s) => s.togglePause);
+   466→   466→   466→  const setSpeed = useHegemoniaStore((s) => s.setSpeed);
+   467→   467→   467→  const currentPhaseIndex = useHegemoniaStore((s) => s.currentPhaseIndex);
+   468→   468→   468→  const isStepMode = useHegemoniaStore((s) => s.isStepMode);
+   469→   469→   469→  const setIsStepMode = useHegemoniaStore((s) => s.setIsStepMode);
+   470→   470→   470→
+   471→   471→   471→  const totalGDP = useHegemoniaStore((s) => s.totalGDP);
+   472→   472→   472→  const totalTrade = useHegemoniaStore((s) => s.totalTrade);
+   473→   473→   473→  const totalPop = useHegemoniaStore((s) => s.totalPopulation);
+   474→   474→   474→  const classCounts = useHegemoniaStore((s) => s.classCounts);
+   475→   475→   475→
+   476→   476→   476→  // Auto-play timer
+   477→   477→   477→  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+   478→   478→   478→  const speed = useHegemoniaStore((s) => s.gameState.speed);
+   479→   479→   479→  const isPaused = useHegemoniaStore((s) => s.gameState.isPaused);
+   480→   480→   480→
+   481→   481→   481→  useEffect(() => {
+   482→   482→   482→    if (isPaused) {
+   483→   483→   483→      if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+   484→   484→   484→      return;
+   485→   485→   485→    }
+   486→   486→   486→    timerRef.current = setInterval(() => {
+   487→   487→   487→      runNextTurn();
+   488→   488→   488→    }, speed);
+   489→   489→   489→    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+   490→   490→   490→  }, [isPaused, speed, runNextTurn]);
+   491→   491→   491→
+   492→   492→   492→  const phases: Phase[] = ["production", "trade", "ideological_spread", "class_dynamics", "npc_decisions", "player_decisions", "classification_update", "metrics_update"];
+   493→   493→   493→
+   494→   494→   494→  return (
+   495→   495→   495→    <div className="min-h-screen bg-[#0a0e1a] text-slate-200 font-mono overflow-hidden">
+   496→   496→   496→      {/* HEADER */}
+   497→   497→   497→      <header className="h-12 bg-[#111827]/80 backdrop-blur border-b border-slate-800/50 flex items-center px-4 gap-4 shrink-0">
+   498→   498→   498→        <div className="flex items-center gap-2">
+   499→   499→   499→          <Globe className="w-4 h-4 text-cyan-400" />
+   500→   500→   500→          <span className="text-sm font-bold text-white tracking-wide">HEGEMONÍA</span>
+   501→   501→   501→          <span className="text-[10px] text-slate-500 uppercase tracking-wider">Engine v1.0</span>
+   502→   502→   502→        </div>
+   503→   503→   503→        <div className="h-6 w-px bg-slate-800" />
+   504→   504→   504→        <div className="flex items-center gap-3 text-[11px]">
+   505→   505→   505→          <span className="text-slate-500">Turno</span>
+   506→   506→   506→          <span className="text-cyan-400 font-bold">#{gameState.turn}</span>
+   507→   507→   507→          <span className="text-slate-500">·</span>
+   508→   508→   508→          <span className="text-slate-400">Año</span>
+   509→   509→   509→          <span className="text-white font-bold">{gameState.year}</span>
+   510→   510→   510→          <span className="text-slate-500">·</span>
+   511→   511→   511→          <span className="text-[10px] text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded border border-amber-400/20">{gameState.lastPhase || "Listo"}</span>
+   512→   512→   512→        </div>
+   513→   513→   513→        <div className="ml-auto flex items-center gap-2">
+   514→   514→   514→          <button onClick={() => setIsStepMode(!isStepMode)}
+   515→   515→   515→            className={`w-7 h-7 rounded flex items-center justify-center transition-colors ${isStepMode ? "bg-cyan-400/20 border border-cyan-400/40" : "bg-slate-800/50 border border-slate-700/50"}`}
+   516→   516→   516→            title={isStepMode ? "Paso a paso activado" : "Paso a paso desactivado"}>
+   517→   517→   517→            <ChevronRight className="w-3 h-3 text-cyan-400" />
+   518→   518→   518→          </button>
+   519→   519→   519→          {isStepMode ? (
+   520→   520→   520→            <button onClick={runNextPhase}
+   521→   521→   521→              className="w-7 h-7 rounded bg-cyan-400/10 border border-cyan-400/20 flex items-center justify-center hover:bg-cyan-400/20 transition-colors" title="Siguiente fase">
+   522→   522→   522→              <ChevronRight className="w-3 h-3 text-cyan-400" />
+   523→   523→   523→            </button>
+   524→   524→   524→          ) : (
+   525→   525→   525→            <button onClick={runNextTurn}
+   526→   526→   526→              className="w-7 h-7 rounded bg-cyan-400/10 border border-cyan-400/20 flex items-center justify-center hover:bg-cyan-400/20 transition-colors" title="Siguiente turno">
+   527→   527→   527→              <SkipForward className="w-3 h-3 text-cyan-400" />
+   528→   528→   528→            </button>
+   529→   529→   529→          )}
+   530→   530→   530→          <button onClick={togglePause}
+   531→   531→   531→            className="w-7 h-7 rounded bg-cyan-400/10 border border-cyan-400/20 flex items-center justify-center hover:bg-cyan-400/20 transition-colors">
+   532→   532→   532→            {isPaused ? <Play className="w-3 h-3 text-cyan-400 ml-0.5" /> : <Pause className="w-3 h-3 text-cyan-400" />}
+   533→   533→   533→          </button>
+   534→   534→   534→          {/* Speed buttons */}
+   535→   535→   535→          <button onClick={() => setSpeed(3000)} className={`text-[9px] px-1.5 py-0.5 rounded ${speed === 3000 ? "bg-cyan-400/20 text-cyan-400" : "text-slate-500 hover:text-slate-300"}`}>0.5x</button>
+   536→   536→   536→          <button onClick={() => setSpeed(2000)} className={`text-[9px] px-1.5 py-0.5 rounded ${speed === 2000 ? "bg-cyan-400/20 text-cyan-400" : "text-slate-500 hover:text-slate-300"}`}>1x</button>
+   537→   537→   537→          <button onClick={() => setSpeed(1000)} className={`text-[9px] px-1.5 py-0.5 rounded ${speed === 1000 ? "bg-cyan-400/20 text-cyan-400" : "text-slate-500 hover:text-slate-300"}`}>2x</button>
+   538→   538→   538→          <button onClick={() => setSpeed(400)} className={`text-[9px] px-1.5 py-0.5 rounded ${speed === 400 ? "bg-cyan-400/20 text-cyan-400" : "text-slate-500 hover:text-slate-300"}`}>5x</button>
+   539→   539→   539→        </div>
+   540→   540→   540→      </header>
+   541→   541→   541→
+   542→   542→   542→      {/* Phase progress bar */}
+   543→   543→   543→      <div className="h-6 bg-[#0d1117] border-b border-slate-800/50 flex items-center px-4 gap-1 overflow-x-auto">
+   544→   544→   544→        {phases.map((p, i) => (
+   545→   545→   545→          <div key={p} className={`text-[9px] px-2 py-0.5 rounded whitespace-nowrap ${
+   546→   546→   546→            isStepMode && i < currentPhaseIndex ? "bg-cyan-400/20 text-cyan-400" :
+   547→   547→   547→            isStepMode && i === currentPhaseIndex ? "bg-amber-400/20 text-amber-400 animate-pulse" :
+   548→   548→   548→            "text-slate-600"
+   549→   549→   549→          }`}>
+   550→   550→   550→            {PHASE_LABELS[p]}
+   551→   551→   551→          </div>
+   552→   552→   552→        ))}
+   553→   553→   553→      </div>
+   554→   554→   554→
+   555→   555→   555→      {/* MAIN CONTENT */}
+   556→   556→   556→      <main className="h-[calc(100vh-4.5rem)] overflow-hidden">
+   557→   557→   557→        <div className="h-full grid grid-cols-12 grid-rows-12 gap-1.5 p-1.5">
+   558→   558→   558→          {/* Graph */}
+   559→   559→   559→          <div className="col-span-5 row-span-8">
+   560→   560→   560→            <GraphView />
+   561→   561→   561→          </div>
+   562→   562→   562→
+   563→   563→   563→          {/* Right column */}
+   564→   564→   564→          <div className="col-span-7 row-span-8 flex flex-col gap-1.5">
+   565→   565→   565→            <div className="grid grid-cols-4 gap-1.5">
+   566→   566→   566→              <StatCard icon={TrendingUp} label="GDP Global" value={`${totalGDP}B`} color="#06b6d4" />
+   567→   567→   567→              <StatCard icon={Activity} label="Comercio" value={`${totalTrade}B`} color="#10b981" />
+   568→   568→   568→              <StatCard icon={Users} label="Población" value={`${totalPop}M`} color="#a855f7" />
+   569→   569→   569→              <StatCard icon={Crown} label="Naciones" value={`${nations.length}`} sub={`${classCounts.core}C · ${classCounts.semi}S · ${classCounts.periphery}P`} color="#f59e0b" />
+   570→   570→   570→            </div>
+   571→   571→   571→            <div className="flex-1 grid grid-cols-2 gap-1.5 min-h-0">
+   572→   572→   572→              <Panel title="GDP por Nación (Top 10)" icon={TrendingUp} className="!flex !flex-col">
+   573→   573→   573→                <div className="flex-1 p-2 min-h-0"><GDPChart nations={nations} /></div>
+   574→   574→   574→              </Panel>
+   575→   575→   575→              <Panel title="Distribución Mundial" icon={Globe} className="!flex !flex-col">
+   576→   576→   576→                <div className="flex-1 p-2 min-h-0"><DistributionChart {...classCounts} /></div>
+   577→   577→   577→              </Panel>
+   578→   578→   578→            </div>
+   579→   579→   579→            <div className="flex-1 min-h-0">
+   580→   580→   580→              <div className="h-full bg-[#111827] border border-slate-800/50 rounded-lg overflow-hidden flex flex-col">
+   581→   581→   581→                <div className="flex border-b border-slate-800/50">
+   582→   582→   582→                  <button onClick={() => setActiveTab("detail")} className={`flex-1 px-4 py-2 text-[10px] uppercase tracking-wider font-mono transition-colors ${activeTab === "detail" ? "text-cyan-400 border-b-2 border-cyan-400 bg-cyan-400/5" : "text-slate-500 hover:text-slate-300"}`}>🔍 Detalle</button>
+   583→   583→   583→                  <button onClick={() => setActiveTab("rankings")} className={`flex-1 px-4 py-2 text-[10px] uppercase tracking-wider font-mono transition-colors ${activeTab === "rankings" ? "text-cyan-400 border-b-2 border-cyan-400 bg-cyan-400/5" : "text-slate-500 hover:text-slate-300"}`}>🏆 Rankings</button>
+   584→   584→   584→                </div>
+   585→   585→   585→                <div className="flex-1 overflow-hidden">
+   586→   586→   586→                  {activeTab === "detail" ? <NodeDetail /> : <RankingsPanel />}
+   587→   587→   587→                </div>
+   588→   588→   588→              </div>
+   589→   589→   589→            </div>
+   590→   590→   590→          </div>
+   591→   591→   591→
+   592→   592→   592→          {/* Bottom left: Events */}
+   593→   593→   593→          <div className="col-span-5 row-span-4">
+   594→   594→   594→            <Panel title="Log de Eventos" icon={Activity} className="!h-full !flex !flex-col">
+   595→   595→   595→              <div className="flex-1 overflow-hidden"><EventLog /></div>
+   596→   596→   596→            </Panel>
+   597→   597→   597→          </div>
+   598→   598→   598→
+   599→   599→   599→          {/* Bottom right: Charts + Ideologies */}
+   600→   600→   600→          <div className="col-span-7 row-span-4 grid grid-cols-2 gap-1.5">
+   601→   601→   601→            <Panel title="Evolución Temporal del GDP" icon={TrendingUp} className="!flex !flex-col">
+   602→   602→   602→              <div className="flex-1 p-2 min-h-0"><TemporalChart /></div>
+   603→   603→   603→            </Panel>
+   604→   604→   604→            <Panel title="Ideologías Activas" icon={Brain} className="!flex !flex-col">
+   605→   605→   605→              <IdeologiesPanel />
+   606→   606→   606→            </Panel>
+   607→   607→   607→          </div>
+   608→   608→   608→        </div>
+   609→   609→   609→      </main>
+   610→   610→   610→    </div>
+   611→   611→   611→  );
+   612→   612→   612→}
+   613→   613→   613→
