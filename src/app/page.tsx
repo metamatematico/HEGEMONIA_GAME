@@ -56,13 +56,13 @@ function StatCard({ icon: Icon, label, value, sub, color }: {
 }
 
 // ─── Panel wrapper ───
-function Panel({ title, icon, children, className }: {
+function Panel({ title, icon: Icon, children, className }: {
   title: string; icon: React.ElementType; children: React.ReactNode; className?: string;
 }) {
   return (
     <div className={`bg-[#111827] border border-slate-800/50 rounded-lg overflow-hidden ${className ?? ""}`}>
       <div className="px-4 py-2.5 border-b border-slate-800/50 flex items-center gap-2">
-        <icon className="w-3.5 h-3.5 text-cyan-400" />
+        <Icon className="w-3.5 h-3.5 text-cyan-400" />
         <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wider font-mono">{title}</h3>
       </div>
       {children}

@@ -31,8 +31,8 @@ export function phaseProduction(nations: NationNode[]): void {
     // Calculate production value
     const production = resourceScore * indMultiplier * ideologyMod * popFactor * 0.1;
 
-    // Update GDP (smooth: blend with previous to avoid jumps)
-    const gdpGrowth = production * 0.05; // 5% of production becomes GDP growth
+    // Update GDP (smooth growth, ~1-3% per turn for healthy economies)
+    const gdpGrowth = production * 0.008; // ~0.8% of production → GDP growth
     n.gdp = Math.max(0.01, n.gdp + gdpGrowth * (0.8 + Math.random() * 0.4));
 
     // Natural resource depletion/regeneration
@@ -113,8 +113,8 @@ export function phaseTrade(nations: NationNode[], edges: TradeEdge[]): GameLogEn
     n.tradeBalance = Math.round(balance);
   }
 
-  // Occasionally spawn new trade routes
-  if (Math.random() < 0.08) {
+  // Occasionally spawn new trade routes (rarer to keep network manageable)
+  if (Math.random() < 0.03) {
     const potentialPairs = findNewTradePairs(nations, edges);
     if (potentialPairs.length > 0) {
       const pair = potentialPairs[Math.floor(Math.random() * potentialPairs.length)];
@@ -139,7 +139,7 @@ export function phaseTrade(nations: NationNode[], edges: TradeEdge[]): GameLogEn
 
   // Occasionally remove weak trade routes
   for (let i = edges.length - 1; i >= 0; i--) {
-    if (edges[i].volume < 3 && Math.random() < 0.1) {
+    if (edges[i].volume < 5 && Math.random() < 0.15) {
       const fromN = nations.find((n) => n.id === edges[i].from);
       const toN = nations.find((n) => n.id === edges[i].to);
       events.push({

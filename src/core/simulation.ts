@@ -16,6 +16,7 @@ import {
   computeDiplomaticPower,
 } from "./economy";
 import { phaseNPCDecisions } from "./npc-ai";
+import { applyIdeologicalEffects } from "./ideologies";
 import { createInitialNations, createInitialEdges } from "./initial-data";
 
 let eventIdCounter = 0;
@@ -126,6 +127,11 @@ export function runPhase(phase: Phase, state: GameState): void {
           a.nationId
         );
       }
+      // Apply ideological mechanics after NPC decisions
+      const ideoEffects = applyIdeologicalEffects(state.nations, state.edges);
+      for (const e of ideoEffects) {
+        addEvent(state, e.type, e.text, e.nationId);
+      }
       break;
     }
 
@@ -188,16 +194,17 @@ function updateClassification(state: GameState): void {
       (totalExports > 0 ? totalImports / (totalExports + totalImports + 1) : 0) * 0.1;
 
     const oldClass = n.worldClass;
-    if (coreScore > 0.5) {
+    // Wider semi-periphery band (0.3-0.7 range) for more stable classification
+    if (coreScore > 0.65) {
       n.worldClass = "core";
-    } else if (peripheryScore > 0.5) {
+    } else if (peripheryScore > 0.65) {
       n.worldClass = "periphery";
     } else {
       n.worldClass = "semi";
     }
 
-    // Log class changes
-    if (oldClass !== n.worldClass) {
+    // Log class changes (only if significant — not every turn)
+    if (oldClass !== n.worldClass && Math.random() < 0.3) {
       addEvent(
         state,
         "ideology",
