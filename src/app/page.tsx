@@ -15,8 +15,11 @@ import { useHegemoniaStore } from "@/store/hegemonia-store";
 import {
   IDEOLOGY_INFO, CLASS_INFO, PHASE_LABELS, type Phase,
 } from "@/core/types";
-import type { NationNode, TradeEdge } from "@/core/types";
+import type { NationNode, TradeEdge, PlayerActionType } from "@/core/types";
 import { getTopPartners } from "@/core/algorithms";
+import {
+  PLAYER_ACTIONS, getPlayerActionMeta, isOnCooldown, canAfford, getEffectiveCost,
+} from "@/core/player-actions";
 
 // ─── Colors helper ───
 function classColor(cls: string): string {
@@ -83,6 +86,9 @@ function GraphView() {
   const edges = useHegemoniaStore((s) => s.edges);
   const selectedNationId = useHegemoniaStore((s) => s.selectedNationId);
   const setSelectedNation = useHegemoniaStore((s) => s.setSelectedNation);
+  const activeTab = useHegemoniaStore((s) => s.activeTab);
+  const actionTargetId = useHegemoniaStore((s) => s.actionTargetId);
+  const setActionTarget = useHegemoniaStore((s) => s.setActionTarget);
 
   const maxVolume = useMemo(() => Math.max(1, ...edges.map((e) => e.volume)), [edges]);
 
@@ -181,9 +187,21 @@ function GraphView() {
           return (
             <g key={n.id} className="gn" transform={`translate(${n.x},${n.y})`} opacity={dimmed ? 0.15 : 1}
               style={{ cursor: "pointer" }}
-              onClick={(ev) => { ev.stopPropagation(); setSelectedNation(isSel ? null : n.id); }}
+              onClick={(ev) => {
+                ev.stopPropagation();
+                if (activeTab === "actions" && n.id !== "gb") {
+                  setActionTarget(isSel ? null : n.id);
+                } else {
+                  setSelectedNation(isSel ? null : n.id);
+                }
+              }}
               onMouseEnter={() => setHoveredNode(n.id)} onMouseLeave={() => setHoveredNode(null)}>
               {isSel && <circle r={r + 4} fill="none" stroke={color} strokeWidth="1.5" opacity="0.4"><animate attributeName="r" values={`${r + 3};${r + 6};${r + 3}`} dur="2s" repeatCount="indefinite" /><animate attributeName="opacity" values="0.4;0.15;0.4" dur="2s" repeatCount="indefinite" /></circle>}
+              {n.id === actionTargetId && (
+                <circle r={r + 3} fill="none" stroke="#ef4444" strokeWidth="1.2" strokeDasharray="3 2" opacity="0.8">
+                  <animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="6s" repeatCount="indefinite" />
+                </circle>
+              )}
               <circle r={r} fill={color} opacity={isSel || isHov ? 1 : 0.75}
                 filter={isSel ? "url(#gk)" : n.worldClass === "core" ? "url(#gc)" : n.worldClass === "semi" ? "url(#gs)" : undefined} />
               <circle r={r * 0.4} fill="white" opacity={isSel ? 0.6 : 0.3} />
@@ -431,6 +449,169 @@ function NodeDetail() {
   );
 }
 
+// ─── Player Actions Panel ───
+function PlayerActionsPanel() {
+  const gameState = useHegemoniaStore((s) => s.gameState);
+  const nations = useHegemoniaStore((s) => s.nations);
+  const queuePlayerAction = useHegemoniaStore((s) => s.queuePlayerAction);
+  const actionTargetId = useHegemoniaStore((s) => s.actionTargetId);
+  const setActionTarget = useHegemoniaStore((s) => s.setActionTarget);
+  const lastResult = useHegemoniaStore((s) => s.lastActionResult);
+  const clearActionResult = useHegemoniaStore((s) => s.clearActionResult);
+
+  const player = nations.find((n) => n.isPlayer);
+  if (!player) return <div className="p-4 text-slate-600 text-xs">No hay nación del jugador</div>;
+
+  const actionsLeft = gameState.maxActionsPerTurn - gameState.playerActionsUsedThisTurn;
+  const cooldowns = gameState.playerCooldowns;
+  const target = actionTargetId ? nations.find((n) => n.id === actionTargetId) : undefined;
+
+  // Group actions by category
+  const categories: Record<string, typeof PLAYER_ACTIONS> = {
+    economy: [], military: [], diplomacy: [], ideology: [], control: [],
+  };
+  for (const a of PLAYER_ACTIONS) categories[a.category].push(a);
+
+  const categoryLabels: Record<string, string> = {
+    economy: "Economía",
+    military: "Militar",
+    diplomacy: "Diplomacia",
+    ideology: "Ideología",
+    control: "Control",
+  };
+
+  const handleAction = (type: PlayerActionType, requiresTarget: boolean) => {
+    if (requiresTarget && !actionTargetId) {
+      // Show hint — select a target first
+      return;
+    }
+    queuePlayerAction(type, requiresTarget ? actionTargetId ?? undefined : undefined);
+    setTimeout(() => clearActionResult(), 3000);
+  };
+
+  return (
+    <div className="h-full flex flex-col overflow-hidden">
+      {/* Header: actions left + player stats */}
+      <div className="px-3 py-2 border-b border-slate-800/50 bg-slate-900/30 flex items-center gap-3 shrink-0">
+        <span className="text-base">{player.flag}</span>
+        <div className="flex-1 min-w-0">
+          <div className="text-xs text-white font-semibold">{player.name}</div>
+          <div className="text-[10px] text-slate-500 font-mono">
+            PIB: ${player.gdp.toFixed(2)}B · Estab: {player.stability.toFixed(0)}% · Descont: {player.unrest.toFixed(0)}%
+          </div>
+        </div>
+        <div className="flex flex-col items-end">
+          <div className="flex gap-0.5">
+            {Array.from({ length: gameState.maxActionsPerTurn }).map((_, i) => (
+              <div
+                key={i}
+                className={`w-3 h-3 rounded-sm ${i < actionsLeft ? "bg-cyan-400" : "bg-slate-700"}`}
+              />
+            ))}
+          </div>
+          <span className="text-[9px] text-slate-500 font-mono mt-0.5">
+            {actionsLeft} acción{actionsLeft !== 1 ? "es" : ""} restante{actionsLeft !== 1 ? "s" : ""}
+          </span>
+        </div>
+      </div>
+
+      {/* Last action result */}
+      {lastResult && (
+        <div className={`px-3 py-1.5 text-[10px] font-mono border-b shrink-0 ${
+          lastResult.success
+            ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+            : "bg-red-500/10 text-red-400 border-red-500/20"
+        }`}>
+          {lastResult.success ? "✓ Acción encolada" : `✗ ${lastResult.reason ?? "Error"}`}
+        </div>
+      )}
+
+      {/* Target selector hint */}
+      <div className="px-3 py-1.5 border-b border-slate-800/30 shrink-0 flex items-center gap-2">
+        <span className="text-[9px] uppercase tracking-wider text-slate-600 font-mono">Objetivo:</span>
+        {target ? (
+          <>
+            <span className="text-xs">{target.flag}</span>
+            <span className="text-[11px] text-slate-300 flex-1 truncate">{target.name}</span>
+            <button
+              onClick={() => setActionTarget(null)}
+              className="text-[10px] text-slate-500 hover:text-red-400 font-mono"
+            >
+              ✕
+            </button>
+          </>
+        ) : (
+          <span className="text-[10px] text-slate-600 italic flex-1">
+            Selecciona una nación en el grafo para acciones con objetivo
+          </span>
+        )}
+      </div>
+
+      {/* Actions grid — scrollable */}
+      <div className="flex-1 overflow-y-auto heg-scroll p-2 space-y-2">
+        {Object.entries(categories).map(([catKey, actions]) => (
+          actions.length > 0 && (
+            <div key={catKey}>
+              <div className="text-[9px] uppercase tracking-wider text-slate-600 font-mono mb-1 px-1">
+                {categoryLabels[catKey]}
+              </div>
+              <div className="grid grid-cols-2 gap-1.5">
+                {actions.map((action) => {
+                  const meta = getPlayerActionMeta(action.type);
+                  const onCd = isOnCooldown(action.type, cooldowns, gameState.turn);
+                  const affordable = canAfford(action.type, player);
+                  const cost = getEffectiveCost(action.type, player);
+                  const needsTarget = meta.requiresTarget && !actionTargetId;
+                  const disabled = onCd || !affordable || needsTarget || actionsLeft <= 0;
+                  const hasIdeologyBonus = meta.ideologyBonus?.includes(player.ideology);
+
+                  return (
+                    <button
+                      key={action.type}
+                      onClick={() => handleAction(action.type, meta.requiresTarget)}
+                      disabled={disabled}
+                      className={`text-left p-2 rounded border transition-all relative ${
+                        disabled
+                          ? "bg-slate-900/30 border-slate-800/30 opacity-50 cursor-not-allowed"
+                          : "bg-slate-800/40 border-slate-700/50 hover:bg-cyan-400/10 hover:border-cyan-400/30 cursor-pointer"
+                      }`}
+                    >
+                      <div className="flex items-center gap-1.5 mb-0.5">
+                        <span className="text-sm">{action.icon}</span>
+                        <span className="text-[11px] font-semibold text-slate-200 truncate">
+                          {action.label}
+                        </span>
+                        {hasIdeologyBonus && (
+                          <span className="text-[8px] px-1 rounded bg-cyan-400/20 text-cyan-400 font-mono ml-auto shrink-0">
+                            BONUS
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[9px] text-slate-500 leading-tight line-clamp-2 mb-1">
+                        {action.description}
+                      </p>
+                      <div className="flex items-center justify-between text-[9px] font-mono">
+                        <span className={affordable ? "text-amber-400" : "text-red-400"}>
+                          ${cost}B
+                        </span>
+                        {onCd && (
+                          <span className="text-slate-500">
+                            ⏱ {(cooldowns[action.type] ?? 0) - gameState.turn}T
+                          </span>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── Ideologies Panel ───
 function IdeologiesPanel() {
   const counts = useHegemoniaStore((s) => s.ideologyCounts);
@@ -472,6 +653,8 @@ export default function Home() {
   const totalTrade = useHegemoniaStore((s) => s.totalTrade);
   const totalPop = useHegemoniaStore((s) => s.totalPopulation);
   const classCounts = useHegemoniaStore((s) => s.classCounts);
+  const actionsLeft = useHegemoniaStore((s) => s.gameState.maxActionsPerTurn - s.gameState.playerActionsUsedThisTurn);
+  const setActionTarget = useHegemoniaStore((s) => s.setActionTarget);
 
   // Auto-play timer
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -581,9 +764,17 @@ export default function Home() {
                 <div className="flex border-b border-slate-800/50">
                   <button onClick={() => setActiveTab("detail")} className={`flex-1 px-4 py-2 text-[10px] uppercase tracking-wider font-mono transition-colors ${activeTab === "detail" ? "text-cyan-400 border-b-2 border-cyan-400 bg-cyan-400/5" : "text-slate-500 hover:text-slate-300"}`}>🔍 Detalle</button>
                   <button onClick={() => setActiveTab("rankings")} className={`flex-1 px-4 py-2 text-[10px] uppercase tracking-wider font-mono transition-colors ${activeTab === "rankings" ? "text-cyan-400 border-b-2 border-cyan-400 bg-cyan-400/5" : "text-slate-500 hover:text-slate-300"}`}>🏆 Rankings</button>
+                  <button onClick={() => setActiveTab("actions")} className={`flex-1 px-4 py-2 text-[10px] uppercase tracking-wider font-mono transition-colors relative ${activeTab === "actions" ? "text-cyan-400 border-b-2 border-cyan-400 bg-cyan-400/5" : "text-slate-500 hover:text-slate-300"}`}>
+                    ⚡ Acciones
+                    {actionsLeft > 0 && (
+                      <span className="absolute top-1 right-2 w-4 h-4 rounded-full bg-cyan-400 text-[9px] text-slate-900 font-bold flex items-center justify-center">
+                        {actionsLeft}
+                      </span>
+                    )}
+                  </button>
                 </div>
                 <div className="flex-1 overflow-hidden">
-                  {activeTab === "detail" ? <NodeDetail /> : <RankingsPanel />}
+                  {activeTab === "detail" ? <NodeDetail /> : activeTab === "rankings" ? <RankingsPanel /> : <PlayerActionsPanel />}
                 </div>
               </div>
             </div>

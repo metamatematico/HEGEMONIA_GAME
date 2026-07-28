@@ -4,9 +4,13 @@
 // Bridges the core engine to React components
 
 import { create } from "zustand";
-import type { GameState, NationNode, TradeEdge, GameEvent, GDPSnapshot, Phase } from "@/core/types";
+import type {
+  GameState, NationNode, TradeEdge, GameEvent, GDPSnapshot, Phase,
+  PlayerActionType, PlayerAction,
+} from "@/core/types";
 import { IDEOLOGY_INFO } from "@/core/types";
 import { createGameState, runTurn, runPhase } from "@/core/simulation";
+import { queueAction as coreQueueAction } from "@/core/player-actions";
 
 interface IdeologyCount {
   name: string;
@@ -28,9 +32,11 @@ interface HegemoniaStore {
 
   // UI state
   selectedNationId: string | null;
-  activeTab: "detail" | "rankings";
+  activeTab: "detail" | "rankings" | "actions";
   currentPhaseIndex: number;
   isStepMode: boolean;
+  actionTargetId: string | null;
+  lastActionResult: { success: boolean; reason?: string } | null;
 
   // Derived values (updated whenever gameState changes)
   nations: NationNode[];
@@ -42,15 +48,20 @@ interface HegemoniaStore {
   totalPopulation: number;
   classCounts: ClassCounts;
   ideologyCounts: IdeologyCount[];
+  playerActionQueue: PlayerAction[];
+  playerCooldowns: GameState["playerCooldowns"];
 
   // Actions
   setSelectedNation: (id: string | null) => void;
-  setActiveTab: (tab: "detail" | "rankings") => void;
+  setActiveTab: (tab: "detail" | "rankings" | "actions") => void;
   togglePause: () => void;
   setSpeed: (ms: number) => void;
   runNextTurn: () => void;
   runNextPhase: () => void;
   setIsStepMode: (step: boolean) => void;
+  queuePlayerAction: (type: PlayerActionType, targetId?: string) => void;
+  setActionTarget: (id: string | null) => void;
+  clearActionResult: () => void;
 }
 
 function computeDerived(state: GameState) {
@@ -76,7 +87,29 @@ function computeDerived(state: GameState) {
     count: ideoCounts[key] ?? 0,
   }));
 
-  return { nations, edges, events, historicalGDP, totalGDP, totalTrade, totalPopulation, classCounts, ideologyCounts };
+  return {
+    nations, edges, events, historicalGDP,
+    totalGDP, totalTrade, totalPopulation,
+    classCounts, ideologyCounts,
+    playerActionQueue: state.playerActionQueue,
+    playerCooldowns: state.playerCooldowns,
+  };
+}
+
+function deepCopy(state: GameState): GameState {
+  return {
+    ...state,
+    nations: state.nations.map((n) => ({
+      ...n,
+      resources: { ...n.resources },
+      socialClasses: { ...n.socialClasses },
+    })),
+    edges: state.edges.map((e) => ({ ...e })),
+    events: [...state.events],
+    historicalGDP: [...state.historicalGDP],
+    playerActionQueue: [...state.playerActionQueue],
+    playerCooldowns: { ...state.playerCooldowns },
+  };
 }
 
 export const useHegemoniaStore = create<HegemoniaStore>((set, get) => {
@@ -90,9 +123,13 @@ export const useHegemoniaStore = create<HegemoniaStore>((set, get) => {
     activeTab: "detail",
     currentPhaseIndex: 0,
     isStepMode: false,
+    actionTargetId: null,
+    lastActionResult: null,
 
     setSelectedNation: (id) => set({ selectedNationId: id }),
     setActiveTab: (tab) => set({ activeTab: tab }),
+    setActionTarget: (id) => set({ actionTargetId: id }),
+    clearActionResult: () => set({ lastActionResult: null }),
 
     togglePause: () =>
       set((s) => {
@@ -108,14 +145,7 @@ export const useHegemoniaStore = create<HegemoniaStore>((set, get) => {
 
     runNextTurn: () =>
       set((s) => {
-        // Deep copy for mutation
-        const newState: GameState = {
-          ...s.gameState,
-          nations: s.gameState.nations.map((n) => ({ ...n, resources: { ...n.resources }, socialClasses: { ...n.socialClasses } })),
-          edges: s.gameState.edges.map((e) => ({ ...e })),
-          events: [...s.gameState.events],
-          historicalGDP: [...s.gameState.historicalGDP],
-        };
+        const newState = deepCopy(s.gameState);
         runTurn(newState);
         return { gameState: newState, currentPhaseIndex: 0, ...computeDerived(newState) };
       }),
@@ -128,13 +158,7 @@ export const useHegemoniaStore = create<HegemoniaStore>((set, get) => {
         ];
 
         const idx = s.currentPhaseIndex;
-        const newState: GameState = {
-          ...s.gameState,
-          nations: s.gameState.nations.map((n) => ({ ...n, resources: { ...n.resources }, socialClasses: { ...n.socialClasses } })),
-          edges: s.gameState.edges.map((e) => ({ ...e })),
-          events: [...s.gameState.events],
-          historicalGDP: [...s.gameState.historicalGDP],
-        };
+        const newState = deepCopy(s.gameState);
 
         if (idx < phases.length) {
           runPhase(phases[idx], newState);
@@ -152,6 +176,20 @@ export const useHegemoniaStore = create<HegemoniaStore>((set, get) => {
         }
 
         return { gameState: newState, currentPhaseIndex: nextIdx, ...computeDerived(newState) };
+      }),
+
+    queuePlayerAction: (type, targetId) =>
+      set((s) => {
+        const newState = deepCopy(s.gameState);
+        const result = coreQueueAction(type, targetId, newState);
+        if (result.success) {
+          newState.playerActionsUsedThisTurn++;
+        }
+        return {
+          gameState: newState,
+          ...computeDerived(newState),
+          lastActionResult: result,
+        };
       }),
 
     setIsStepMode: (step) => set({ isStepMode: step }),

@@ -114,6 +114,12 @@ export interface GameState {
   isPaused: boolean;
   speed: number; // ms per turn
   lastPhase: string; // for UI display
+
+  // Player state
+  playerActionQueue: PlayerAction[];
+  playerCooldowns: CooldownMap;
+  playerActionsUsedThisTurn: number;
+  maxActionsPerTurn: number;
 }
 
 /** NPC action decision */
@@ -123,6 +129,52 @@ export interface NPCAction {
   targetId?: string;
   utility: number;
   reasoning: string;
+}
+
+// ─── Player Action System ─────────────────────────────────────
+
+/** Identifier for each player action type */
+export type PlayerActionType =
+  | "invest_industry"     // Boost industrialization
+  | "build_military"      // Increase military power
+  | "lower_tariffs"       // Reduce trade barriers
+  | "raise_tariffs"       // Protectionist measure
+  | "seek_trade"          // Find new trade partner
+  | "spread_ideology"     // Cultural pressure on neighbor
+  | "suppress_unrest"     // Restore order
+  | "build_infrastructure" // Long-term GDP boost
+  | "diplomatic_pressure" // Boost diplomatic power
+  | "colonial_expansion"; // Steal resources from periphery
+
+/** A queued player action ready to execute */
+export interface PlayerAction {
+  id: string;
+  type: PlayerActionType;
+  targetId?: string;        // For seek_trade / spread_ideology / colonial_expansion
+  queuedTurn: number;       // When it was queued
+}
+
+/** Cooldown tracker per action type */
+export type CooldownMap = Partial<Record<PlayerActionType, number>>; // actionType → turn available again
+
+/** Static metadata for each action */
+export interface PlayerActionMeta {
+  type: PlayerActionType;
+  label: string;
+  icon: string;
+  description: string;
+  /** GDP cost in billions */
+  cost: number;
+  /** Cooldown in turns before re-use */
+  cooldown: number;
+  /** Whether the action requires a target nation */
+  requiresTarget: boolean;
+  /** Category for UI grouping */
+  category: "economy" | "military" | "diplomacy" | "ideology" | "control";
+  /** Optional: requires minimum stability to use */
+  minStability?: number;
+  /** Optional: ideology affinity — bonus when player matches */
+  ideologyBonus?: Ideology[];
 }
 
 /** Phase of the game loop */

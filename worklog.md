@@ -43,3 +43,30 @@ Stage Summary:
 - Step mode: press step button to advance one phase at a time
 - All panels update live: graph nodes, GDP charts, event log, classifications
 - Verified working at http://localhost:3000
+
+---
+Task ID: 3
+Agent: Main Agent
+Task: Fase 3 — Interactividad del Jugador
+
+Work Log:
+- Added PlayerActionType, PlayerAction, CooldownMap, PlayerActionMeta types to types.ts
+- Added playerActionQueue, playerCooldowns, playerActionsUsedThisTurn, maxActionsPerTurn to GameState
+- Created src/core/player-actions.ts with 10 player actions across 5 categories (economy, military, diplomacy, ideology, control)
+- Each action has: cost, cooldown, target requirement, ideology bonus (20% cost discount)
+- Actions: invest_industry, build_military, lower_tariffs, raise_tariffs, seek_trade, spread_ideology, suppress_unrest, build_infrastructure, diplomatic_pressure, colonial_expansion
+- Updated simulation.ts: player_decisions phase now calls executePlayerActions()
+- Updated createGameState() with new player state fields
+- Rewrote hegemonia-store.ts with queuePlayerAction, setActionTarget, clearActionResult, deepCopy helper
+- Added PlayerActionsPanel component to dashboard with: action grid grouped by category, target selector, cooldown/cost display, ideology bonus indicator
+- Added "Acciones" tab (3rd tab) with actions-remaining badge
+- Graph nodes: red rotating ring for selected target, click sets target when in actions mode
+- Zero TypeScript errors, 200 OK verified
+
+Stage Summary:
+- Fase 3 COMPLETE: Full player interactivity
+- Player controls Gran Bretaña with 10 actions, max 2 per turn
+- Target selection via graph click (red dashed ring indicator)
+- Economy-based cost system with ideology bonuses
+- Cooldown system prevents spam
+- All actions generate events visible in the log

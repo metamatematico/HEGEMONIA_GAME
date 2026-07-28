@@ -17,6 +17,7 @@ import {
 } from "./economy";
 import { phaseNPCDecisions } from "./npc-ai";
 import { applyIdeologicalEffects } from "./ideologies";
+import { executePlayerActions } from "./player-actions";
 import { createInitialNations, createInitialEdges } from "./initial-data";
 
 let eventIdCounter = 0;
@@ -38,6 +39,10 @@ export function createGameState(): GameState {
     isPaused: true,
     speed: 2000,
     lastPhase: "",
+    playerActionQueue: [],
+    playerCooldowns: {},
+    playerActionsUsedThisTurn: 0,
+    maxActionsPerTurn: 2,
   };
 }
 
@@ -135,10 +140,15 @@ export function runPhase(phase: Phase, state: GameState): void {
       break;
     }
 
-    case "player_decisions":
-      // Player decisions are handled by UI interactions
-      // This phase is a no-op in auto mode
+    case "player_decisions": {
+      const playerEvents = executePlayerActions(state);
+      for (const e of playerEvents) {
+        state.events.push(e);
+      }
+      // Trim events
+      if (state.events.length > 100) state.events = state.events.slice(-100);
       break;
+    }
 
     case "classification_update":
       updateClassification(state);
