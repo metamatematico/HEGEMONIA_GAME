@@ -12,8 +12,10 @@ import {
   TrendingUp, Crown, Swords, Brain, ChevronRight, ChevronLeft, FastForward
 } from "lucide-react";
 import { useHegemoniaStore } from "@/store/hegemonia-store";
+import GameIntroScreen from "@/components/hegemonia/GameIntroScreen";
+import NationSetupScreen from "@/components/hegemonia/NationSetupScreen";
 import {
-  IDEOLOGY_INFO, CLASS_INFO, PHASE_LABELS, type Phase,
+  IDEOLOGY_INFO, TRAIT_INFO, CLASS_INFO, PHASE_LABELS, type Phase,
 } from "@/core/types";
 import type { NationNode, TradeEdge, PlayerActionType } from "@/core/types";
 import { getTopPartners } from "@/core/algorithms";
@@ -357,7 +359,7 @@ function NodeDetail() {
   if (!nation) return <div className="flex items-center justify-center h-full text-slate-600 text-xs">Selecciona un nodo del grafo</div>;
   const topPartners = getTopPartners(nation.id, edges, 5);
   const socialTotal = nation.socialClasses.elite + nation.socialClasses.middle + nation.socialClasses.working + nation.socialClasses.peasant;
-  const ideoInfo = IDEOLOGY_INFO[nation.ideology];
+  const ideoInfo = IDEOLOGY_INFO[nation.primaryIdeology];
 
   return (
     <div className="p-4 space-y-4 overflow-y-auto heg-scroll h-full">
@@ -563,7 +565,7 @@ function PlayerActionsPanel() {
                   const cost = getEffectiveCost(action.type, player);
                   const needsTarget = meta.requiresTarget && !actionTargetId;
                   const disabled = onCd || !affordable || needsTarget || actionsLeft <= 0;
-                  const hasIdeologyBonus = meta.ideologyBonus?.includes(player.ideology);
+                  const hasIdeologyBonus = meta.ideologyBonus?.includes(player.primaryIdeology);
 
                   return (
                     <button
@@ -637,6 +639,13 @@ function IdeologiesPanel() {
 // MAIN DASHBOARD — CONNECTED TO ENGINE
 // ═══════════════════════════════════════════════════════════
 export default function Home() {
+  // All hooks must be called before any conditional returns (Rules of Hooks)
+  const gameScreen = useHegemoniaStore((s) => s.gameScreen);
+  const setGameScreen = useHegemoniaStore((s) => s.setGameScreen);
+  const startNewGame = useHegemoniaStore((s) => s.startNewGame);
+  const backToSetup = useHegemoniaStore((s) => s.backToSetup);
+  const playerProfile = useHegemoniaStore((s) => s.playerProfile);
+
   const gameState = useHegemoniaStore((s) => s.gameState);
   const nations = useHegemoniaStore((s) => s.nations);
   const activeTab = useHegemoniaStore((s) => s.activeTab);
@@ -674,6 +683,26 @@ export default function Home() {
 
   const phases: Phase[] = ["production", "trade", "ideological_spread", "class_dynamics", "npc_decisions", "player_decisions", "classification_update", "metrics_update"];
 
+  // ─── Game flow routing (after all hooks) ───
+  if (gameScreen === "intro") {
+    return (
+      <GameIntroScreen onComplete={() => setGameScreen("setup")} />
+    );
+  }
+
+  if (gameScreen === "setup") {
+    return (
+      <NationSetupScreen
+        onStart={(nationId, primaryIdeology, secondaryIdeologies, trait, focus) => {
+          startNewGame({ nationId, primaryIdeology, secondaryIdeologies, trait, focus });
+        }}
+        onBack={() => {}}
+      />
+    );
+  }
+
+  // ─── Dashboard (gameScreen === "playing") ───
+
   return (
     <div className="min-h-screen bg-[#0a0e1a] text-slate-200 font-mono overflow-hidden">
       {/* HEADER */}
@@ -694,6 +723,17 @@ export default function Home() {
           <span className="text-[10px] text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded border border-amber-400/20">{gameState.lastPhase || "Listo"}</span>
         </div>
         <div className="ml-auto flex items-center gap-2">
+          {/* Player profile indicator */}
+          {playerProfile && (
+            <div className="flex items-center gap-1.5 mr-2">
+              <span className="text-[9px] px-1.5 py-0.5 rounded font-mono" style={{ background: IDEOLOGY_INFO[playerProfile.primaryIdeology].color + "20", color: IDEOLOGY_INFO[playerProfile.primaryIdeology].color }}>
+                {IDEOLOGY_INFO[playerProfile.primaryIdeology].icon} {IDEOLOGY_INFO[playerProfile.primaryIdeology].name}
+              </span>
+              <span className="text-[9px] px-1.5 py-0.5 rounded font-mono bg-purple-500/10 text-purple-400">
+                {TRAIT_INFO[playerProfile.trait].icon} {TRAIT_INFO[playerProfile.trait].name}
+              </span>
+            </div>
+          )}
           <button onClick={() => setIsStepMode(!isStepMode)}
             className={`w-7 h-7 rounded flex items-center justify-center transition-colors ${isStepMode ? "bg-cyan-400/20 border border-cyan-400/40" : "bg-slate-800/50 border border-slate-700/50"}`}
             title={isStepMode ? "Paso a paso activado" : "Paso a paso desactivado"}>

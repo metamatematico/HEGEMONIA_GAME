@@ -3,7 +3,7 @@
 // ============================================================
 // Orchestrates the 8-phase game turn and manages game state
 
-import type { GameState, NationNode, TradeEdge, GameEvent, GDPSnapshot, Phase } from "./types";
+import type { GameState, NationNode, TradeEdge, GameEvent, GDPSnapshot, Phase, GameOverResult } from "./types";
 import { PHASE_LABELS } from "./types";
 import { eigenvectorCentrality, betweennessCentrality } from "./algorithms";
 import {
@@ -43,6 +43,15 @@ export function createGameState(): GameState {
     playerCooldowns: {},
     playerActionsUsedThisTurn: 0,
     maxActionsPerTurn: 2,
+    gameMode: "ai" as const,
+    aiDifficulty: "normal" as const,
+    gameOver: null,
+    playerProfile: null,
+    lowStabilityTurns: 0,
+    zeroTradeTurns: 0,
+    peripheryTurns: 0,
+    lowMilitaryTurns: 0,
+    lastNPCActions: [],
   };
 }
 
@@ -84,6 +93,9 @@ export function runTurn(state: GameState): void {
   if (state.historicalGDP.length > 50) {
     state.historicalGDP = state.historicalGDP.slice(-50);
   }
+
+  // Check victory / defeat conditions
+  checkWinLose(state);
 }
 
 /**
@@ -283,4 +295,245 @@ function actionLabel(action: string): string {
     suppress_unrest: "Suprime descontento",
   };
   return labels[action] ?? action;
+}
+
+// ─── Victory / Defeat Conditions ───────────────────────────────
+
+/**
+ * Check all 8 victory conditions and 7 defeat conditions.
+ * If a condition is met, set state.gameOver to a GameOverResult.
+ */
+function checkWinLose(state: GameState): void {
+  if (state.gameOver) return; // already decided
+
+  const player = state.nations.find((n) => n.isPlayer);
+  if (!player) return;
+
+  const totalNations = state.nations.length;
+  const playerTradeEdges = state.edges.filter(
+    (e) => e.from === player.id || e.to === player.id
+  );
+  const playerTradeVolume = playerTradeEdges.reduce((s, e) => s + e.volume, 0);
+  const playerGDPShare = player.gdp / Math.max(0.01, state.nations.reduce((s, n) => s + n.gdp, 0));
+  const ideologyMatchCount = state.nations.filter(
+    (n) => n.primaryIdeology === player.primaryIdeology || n.secondaryIdeologies.includes(player.primaryIdeology)
+  ).length;
+  const ideologyShare = ideologyMatchCount / totalNations;
+  const peripheryNations = state.nations.filter((n) => n.worldClass === "periphery");
+  const maxMilitary = Math.max(...state.nations.map((n) => n.militaryPower));
+
+  // ── Track persistent conditions for defeat thresholds ──
+  if (player.stability < 20) state.lowStabilityTurns++;
+  else state.lowStabilityTurns = Math.max(0, state.lowStabilityTurns - 1);
+
+  if (playerTradeEdges.length === 0) state.zeroTradeTurns++;
+  else state.zeroTradeTurns = Math.max(0, state.zeroTradeTurns - 1);
+
+  if (player.worldClass === "periphery") state.peripheryTurns++;
+  else state.peripheryTurns = Math.max(0, state.peripheryTurns - 1);
+
+  if (player.militaryPower < 15) state.lowMilitaryTurns++;
+  else state.lowMilitaryTurns = Math.max(0, state.lowMilitaryTurns - 1);
+
+  const score = computeScore(player, state);
+  const rank = computeRank(player, state.nations);
+
+  // ── 8 VICTORY CONDITIONS ──
+
+  // 1. dominación_económica: GDP share > 35%
+  if (playerGDPShare > 0.35) {
+    state.gameOver = {
+      type: "victory",
+      condition: "dominación_económica",
+      reason: `Tu PIB domina el ${Math.round(playerGDPShare * 100)}% de la economía mundial.`,
+      score, rank, totalNations, turn: state.turn, year: state.year,
+    };
+    return;
+  }
+
+  // 2. hegemonía_total: #1 in military AND cultural AND diplomatic
+  if (
+    player.militaryPower === maxMilitary &&
+    player.culturalPower >= 80 &&
+    player.diplomaticPower >= 80
+  ) {
+    state.gameOver = {
+      type: "victory",
+      condition: "hegemonía_total",
+      reason: "Dominas simultáneamente en poder militar, cultural y diplomático.",
+      score, rank, totalNations, turn: state.turn, year: state.year,
+    };
+    return;
+  }
+
+  // 3. victoria_ideológica: >60% of nations share your ideology
+  if (ideologyShare > 0.6) {
+    state.gameOver = {
+      type: "victory",
+      condition: "victoria_ideológica",
+      reason: `El ${Math.round(ideologyShare * 100)}% de las naciones comparten tu ideología.`,
+      score, rank, totalNations, turn: state.turn, year: state.year,
+    };
+    return;
+  }
+
+  // 4. supremacía_científica: industrialization > 90 AND core
+  if (player.industrialization > 90 && player.worldClass === "core") {
+    state.gameOver = {
+      type: "victory",
+      condition: "supremacía_científica",
+      reason: "Tu industrialización avanza sin rival. Eres la potencia científica del mundo.",
+      score, rank, totalNations, turn: state.turn, year: state.year,
+    };
+    return;
+  }
+
+  // 5. imperio_comercial: >8 trade routes AND total trade volume > 500
+  if (playerTradeEdges.length > 8 && playerTradeVolume > 500) {
+    state.gameOver = {
+      type: "victory",
+      condition: "imperio_comercial",
+      reason: "Tu red comercial es la más extensa del mundo.",
+      score, rank, totalNations, turn: state.turn, year: state.year,
+    };
+    return;
+  }
+
+  // 6. hegemonía_diplomática: diplomatic power > 90
+  if (player.diplomaticPower > 90) {
+    state.gameOver = {
+      type: "victory",
+      condition: "hegemonía_diplomática",
+      reason: "Tu influencia diplomática es inigualable.",
+      score, rank, totalNations, turn: state.turn, year: state.year,
+    };
+    return;
+  }
+
+  // 7. dominación_cultural: cultural power > 90
+  if (player.culturalPower > 90) {
+    state.gameOver = {
+      type: "victory",
+      condition: "dominación_cultural",
+      reason: "Tu cultura domina el mundo.",
+      score, rank, totalNations, turn: state.turn, year: state.year,
+    };
+    return;
+  }
+
+  // 8. imperio_colonial: trade with >75% of periphery nations
+  const colonialTargets = peripheryNations.filter((pn) =>
+    playerTradeEdges.some((e) => e.from === pn.id || e.to === pn.id)
+  );
+  if (peripheryNations.length > 0 && colonialTargets.length / peripheryNations.length > 0.75) {
+    state.gameOver = {
+      type: "victory",
+      condition: "imperio_colonial",
+      reason: "Dominas las rutas comerciales de la periferia mundial.",
+      score, rank, totalNations, turn: state.turn, year: state.year,
+    };
+    return;
+  }
+
+  // ── 7 DEFEAT CONDITIONS ──
+
+  // 1. revolución_interna: stability < 10 for 8+ consecutive turns
+  if (player.stability < 10 && state.lowStabilityTurns >= 8) {
+    state.gameOver = {
+      type: "defeat",
+      condition: "revolución_interna",
+      reason: "Revolución interna: tu estabilidad colapsó y el pueblo se levantó.",
+      score, rank, totalNations, turn: state.turn, year: state.year,
+    };
+    return;
+  }
+
+  // 2. ruina_económica: GDP < 0.05
+  if (player.gdp < 0.05) {
+    state.gameOver = {
+      type: "defeat",
+      condition: "ruina_económica",
+      reason: "Tu economía se ha derrumbado completamente.",
+      score, rank, totalNations, turn: state.turn, year: state.year,
+    };
+    return;
+  }
+
+  // 3. colapso_periférico: stuck in periphery for 20+ turns
+  if (state.peripheryTurns >= 20) {
+    state.gameOver = {
+      type: "defeat",
+      condition: "colapso_periférico",
+      reason: "Tu nación quedó atrapada en la periferia mundial.",
+      score, rank, totalNations, turn: state.turn, year: state.year,
+    };
+    return;
+  }
+
+  // 4. conquista_militar: military < 5 for 10+ consecutive turns
+  if (player.militaryPower < 5 && state.lowMilitaryTurns >= 10) {
+    state.gameOver = {
+      type: "defeat",
+      condition: "conquista_militar",
+      reason: "Tu ejército es insignificante. Eres vulnerable a la conquista.",
+      score, rank, totalNations, turn: state.turn, year: state.year,
+    };
+    return;
+  }
+
+  // 5. aislamiento_comercial: zero trade for 15+ consecutive turns
+  if (state.zeroTradeTurns >= 15) {
+    state.gameOver = {
+      type: "defeat",
+      condition: "aislamiento_comercial",
+      reason: "Sin comercio durante demasiado tiempo. Tu nación está aislada.",
+      score, rank, totalNations, turn: state.turn, year: state.year,
+    };
+    return;
+  }
+
+  // 6. sobreextensión: trade balance deeply negative AND stability < 30 AND gdp falling
+  if (player.tradeBalance < -50 && player.stability < 30 && player.gdp < 0.1) {
+    state.gameOver = {
+      type: "defeat",
+      condition: "sobreextensión",
+      reason: "Sobreextensión: tus compromisos superan tu capacidad.",
+      score, rank, totalNations, turn: state.turn, year: state.year,
+    };
+    return;
+  }
+
+  // 7. crisis_de_deuda: GDP < 0.02 AND tradeBalance < -30
+  if (player.gdp < 0.02 && player.tradeBalance < -30) {
+    state.gameOver = {
+      type: "defeat",
+      condition: "crisis_de_deuda",
+      reason: "Crisis de deuda insostenible. Tu nación ha quebrado.",
+      score, rank, totalNations, turn: state.turn, year: state.year,
+    };
+    return;
+  }
+}
+
+/** Compute a score (0-1000) based on player nation stats */
+function computeScore(player: NationNode, state: GameState): number {
+  return Math.round(
+    player.gdp * 200 +
+    player.militaryPower * 3 +
+    player.culturalPower * 3 +
+    player.diplomaticPower * 3 +
+    player.industrialization * 2 +
+    player.stability * 1.5 +
+    state.edges.filter((e) => e.from === player.id || e.to === player.id).length * 5
+  );
+}
+
+/** Compute player's rank (1 = best) by composite power */
+function computeRank(player: NationNode, nations: NationNode[]): number {
+  const sorted = [...nations].sort(
+    (a, b) =>
+      (b.militaryPower + b.culturalPower + b.diplomaticPower + b.gdp * 10) -
+      (a.militaryPower + a.culturalPower + a.diplomaticPower + a.gdp * 10)
+  );
+  return sorted.findIndex((n) => n.id === player.id) + 1;
 }

@@ -1,7 +1,7 @@
 // ============================================================
 // Hegemonía Core Engine — Ideology Mechanics
 // ============================================================
-// Each of the 6 ideologies has unique graph mechanics that
+// Each of the 12 ideologies has unique graph mechanics that
 // modify trade flows, centrality propagation, social dynamics,
 // and NPC behavior. Based on Wallerstein, Marx, and Smith.
 //
@@ -122,7 +122,7 @@ function liberalismEffect(
   // Event: trade agreement proposal
   if (Math.random() < 0.04) {
     const potentialPartners = nations.filter(
-      (n) => n.id !== nation.id && n.ideology !== "absolutism"
+      (n) => n.id !== nation.id && n.primaryIdeology !== "absolutism"
     );
     if (potentialPartners.length > 0) {
       const partner = potentialPartners[Math.floor(Math.random() * potentialPartners.length)];
@@ -326,6 +326,343 @@ function absolutismEffect(
   return effects;
 }
 
+function imperialismEdgeMod(volume: number, fromClass: string, _toClass: string): number {
+  // Imperialism: boosts extraction from periphery (colonial exploitation)
+  if (fromClass === "periphery") return volume * 1.2;
+  return volume * 1.0;
+}
+
+function imperialismEffect(
+  nation: NationNode, nations: NationNode[], edges: TradeEdge[]
+): IdeologyEffect[] {
+  const effects: IdeologyEffect[] = [];
+
+  // Imperialism: actively extract resources from periphery neighbors
+  for (const e of edges) {
+    if (e.from === nation.id) {
+      const toNation = nations.find((n) => n.id === e.to);
+      if (toNation && toNation.worldClass === "periphery") {
+        // Increase extraction volume
+        e.volume = Math.min(500, e.volume * 1.03);
+      }
+    }
+  }
+
+  // Military buildup for imperial power
+  nation.militaryPower = Math.min(100, nation.militaryPower + 1.0);
+
+  // Reduce colonial stability in periphery neighbors
+  const neighbors = new Set<string>();
+  for (const e of edges) {
+    if (e.from === nation.id) neighbors.add(e.to);
+    if (e.to === nation.id) neighbors.add(e.from);
+  }
+  for (const neighborId of neighbors) {
+    const neighbor = nations.find((n) => n.id === neighborId);
+    if (neighbor && neighbor.worldClass === "periphery") {
+      neighbor.stability = Math.max(5, neighbor.stability - 0.5);
+    }
+  }
+
+  // Event: colonial expansion / resource seizure
+  if (Math.random() < 0.03 && nation.militaryPower > 40) {
+    const colonies = nations.filter(
+      (n) => n.worldClass === "periphery" && n.id !== nation.id && neighbors.has(n.id)
+    );
+    if (colonies.length > 0) {
+      const colony = colonies[Math.floor(Math.random() * colonies.length)];
+      colony.resources.grain = Math.max(5, colony.resources.grain - 2);
+      colony.resources.coal = Math.max(5, colony.resources.coal - 1);
+      colony.stability = Math.max(5, colony.stability - 3);
+      nation.gdp += 0.02;
+      effects.push({
+        type: "trade",
+        text: `${nation.name}: Extracción imperialista de recursos en ${colony.name}`,
+        nationId: nation.id,
+      });
+    }
+  }
+
+  return effects;
+}
+
+function constitutionalismEdgeMod(_volume: number, _fromClass: string, _toClass: string): number {
+  // Constitutionalism: slight general boost from rule-of-law stability
+  return _volume * 1.03;
+}
+
+function constitutionalismEffect(
+  nation: NationNode, nations: NationNode[], edges: TradeEdge[]
+): IdeologyEffect[] {
+  const effects: IdeologyEffect[] = [];
+
+  // Constitutionalism: gradual industrialization through rule of law
+  nation.industrialization = Math.min(100, nation.industrialization + 0.12);
+  nation.stability = Math.min(95, nation.stability + 1.0);
+
+  // Stable tariffs: gently move toward ideal
+  for (const e of edges) {
+    if (e.from === nation.id || e.to === nation.id) {
+      e.tariffRate += (0.10 - e.tariffRate) * 0.03;
+    }
+  }
+
+  // Social mobility: constitutional protections
+  nation.socialClasses.middle = Math.min(40, nation.socialClasses.middle + 0.1);
+  nation.socialClasses.peasant = Math.max(5, nation.socialClasses.peasant - 0.05);
+
+  // Event: constitutional reform strengthening trade
+  if (Math.random() < 0.03) {
+    const partners = nations.filter(
+      (n) => n.id !== nation.id && edges.some(
+        (e) => (e.from === nation.id && e.to === n.id) || (e.to === nation.id && e.from === n.id)
+      )
+    );
+    if (partners.length > 0) {
+      const partner = partners[Math.floor(Math.random() * partners.length)];
+      for (const e of edges) {
+        if (
+          (e.from === nation.id && e.to === partner.id) ||
+          (e.to === nation.id && e.from === partner.id)
+        ) {
+          e.volume = Math.min(500, e.volume * 1.08);
+          effects.push({
+            type: "diplomacy",
+            text: `${nation.name}: Reforma constitucional fortalece comercio con ${partner.name}`,
+            nationId: nation.id,
+          });
+          return effects;
+        }
+      }
+    }
+  }
+
+  return effects;
+}
+
+function progressivismEdgeMod(volume: number, fromClass: string, toClass: string): number {
+  // Progressivism: boosts trade between core and semi (reform-driven integration)
+  if (
+    (fromClass === "core" && toClass === "semi") ||
+    (fromClass === "semi" && toClass === "core")
+  ) return volume * 1.05;
+  return volume * 1.0;
+}
+
+function progressivismEffect(
+  nation: NationNode, _nations: NationNode[], edges: TradeEdge[]
+): IdeologyEffect[] {
+  const effects: IdeologyEffect[] = [];
+
+  // Progressivism: social mobility boost
+  nation.socialClasses.working = Math.min(55, nation.socialClasses.working + 0.2);
+  nation.socialClasses.middle = Math.min(40, nation.socialClasses.middle + 0.15);
+  nation.socialClasses.peasant = Math.max(5, nation.socialClasses.peasant - 0.15);
+
+  // Industrialization through reform
+  nation.industrialization = Math.min(100, nation.industrialization + 0.15);
+
+  // Progressive tariffs: lower barriers
+  for (const e of edges) {
+    if (e.from === nation.id || e.to === nation.id) {
+      e.tariffRate = Math.max(0.01, e.tariffRate * 0.97);
+    }
+  }
+
+  // Event: social reform
+  if (Math.random() < 0.04) {
+    nation.unrest = Math.max(0, nation.unrest - 5);
+    nation.stability = Math.min(95, nation.stability + 2);
+    effects.push({
+      type: "ideology",
+      text: `${nation.name}: Reforma progresiva reduce descontento social`,
+      nationId: nation.id,
+    });
+  }
+
+  return effects;
+}
+
+function anarchismEdgeMod(volume: number, fromClass: string, toClass: string): number {
+  // Anarchism: strengthens periphery-periphery solidarity, weakens core involvement
+  if (fromClass === "periphery" && toClass === "periphery") return volume * 1.2;
+  if (fromClass === "core" || toClass === "core") return volume * 0.85;
+  return volume * 1.0;
+}
+
+function anarchismEffect(
+  nation: NationNode, nations: NationNode[], edges: TradeEdge[]
+): IdeologyEffect[] {
+  const effects: IdeologyEffect[] = [];
+
+  // Anarchism: massive social mobility
+  nation.socialClasses.working = Math.min(55, nation.socialClasses.working + 0.3);
+  nation.socialClasses.middle = Math.min(40, nation.socialClasses.middle + 0.2);
+  nation.socialClasses.elite = Math.max(2, nation.socialClasses.elite - 0.15);
+  nation.socialClasses.peasant = Math.max(5, nation.socialClasses.peasant - 0.25);
+
+  // Unrest reduction through mutual aid
+  nation.unrest = Math.max(0, nation.unrest - 3);
+  nation.stability = Math.min(95, nation.stability + 0.5);
+
+  // Near-zero tariffs (anti-state)
+  for (const e of edges) {
+    if (e.from === nation.id || e.to === nation.id) {
+      e.tariffRate = Math.max(0.01, e.tariffRate * 0.95);
+    }
+  }
+
+  // Event: mutual aid network with periphery
+  if (Math.random() < 0.04) {
+    const neighbors = new Set<string>();
+    for (const e of edges) {
+      if (e.from === nation.id) neighbors.add(e.to);
+      if (e.to === nation.id) neighbors.add(e.from);
+    }
+    const peripheryAllies = nations.filter(
+      (n) => neighbors.has(n.id) && n.worldClass === "periphery"
+    );
+    if (peripheryAllies.length > 0) {
+      const ally = peripheryAllies[Math.floor(Math.random() * peripheryAllies.length)];
+      ally.unrest = Math.max(0, ally.unrest - 5);
+      ally.stability = Math.min(95, ally.stability + 2);
+      for (const e of edges) {
+        if (
+          (e.from === nation.id && e.to === ally.id) ||
+          (e.to === nation.id && e.from === ally.id)
+        ) {
+          e.volume = Math.min(500, e.volume * 1.15);
+        }
+      }
+      effects.push({
+        type: "trade",
+        text: `${nation.name}: Red de ayuda mutua con ${ally.name}`,
+        nationId: nation.id,
+      });
+    }
+  }
+
+  return effects;
+}
+
+function theocracyEdgeMod(_volume: number, _fromClass: string, _toClass: string): number {
+  // Theocracy: neutral trade modifier — power comes from stability and culture, not trade
+  return _volume * 1.0;
+}
+
+function theocracyEffect(
+  nation: NationNode, nations: NationNode[], edges: TradeEdge[]
+): IdeologyEffect[] {
+  const effects: IdeologyEffect[] = [];
+
+  // Theocracy: massive stability from religious authority
+  nation.stability = Math.min(95, nation.stability + 2.5);
+  nation.unrest = Math.max(0, nation.unrest - 4);
+
+  // Cultural power growth through religious institutions
+  nation.culturalPower = Math.min(100, nation.culturalPower + 1.0);
+
+  // Suppress social mobility (rigid hierarchy)
+  nation.socialClasses.peasant = Math.min(90, nation.socialClasses.peasant + 0.1);
+  nation.socialClasses.elite = Math.min(20, nation.socialClasses.elite + 0.05);
+
+  // Maintain moderate tariffs
+  for (const e of edges) {
+    if (e.from === nation.id || e.to === nation.id) {
+      e.tariffRate += (0.18 - e.tariffRate) * 0.04;
+    }
+  }
+
+  // Event: religious mission / cultural spread to neighbors
+  if (Math.random() < 0.04 && nation.culturalPower > 40) {
+    const neighbors = new Set<string>();
+    for (const e of edges) {
+      if (e.from === nation.id) neighbors.add(e.to);
+      if (e.to === nation.id) neighbors.add(e.from);
+    }
+    const targets = nations.filter(
+      (n) => neighbors.has(n.id) && n.id !== nation.id
+    );
+    if (targets.length > 0) {
+      const target = targets[Math.floor(Math.random() * targets.length)];
+      // Religious influence spreads
+      target.culturalPower = Math.min(100, target.culturalPower * 1.05);
+      if (target.worldClass === "periphery") {
+        target.stability = Math.min(95, target.stability + 2);
+      }
+      effects.push({
+        type: "ideology",
+        text: `${nation.name}: Misión religiosa extiende influencia en ${target.name}`,
+        nationId: nation.id,
+      });
+    }
+  }
+
+  return effects;
+}
+
+function syndicalismEdgeMod(volume: number, fromClass: string, toClass: string): number {
+  // Syndicalism: boosts trade between periphery nations (worker solidarity)
+  if (fromClass === "periphery" || toClass === "periphery") return volume * 1.15;
+  return volume * 1.0;
+}
+
+function syndicalismEffect(
+  nation: NationNode, nations: NationNode[], edges: TradeEdge[]
+): IdeologyEffect[] {
+  const effects: IdeologyEffect[] = [];
+
+  // Syndicalism: boost working class, reduce elite
+  nation.socialClasses.working = Math.min(55, nation.socialClasses.working + 0.25);
+  nation.socialClasses.elite = Math.max(2, nation.socialClasses.elite - 0.1);
+
+  // Industrial growth through worker-owned production
+  nation.industrialization = Math.min(100, nation.industrialization + 0.13);
+
+  // Moderate tariffs for self-sufficiency
+  for (const e of edges) {
+    if (e.from === nation.id || e.to === nation.id) {
+      e.tariffRate += (0.12 - e.tariffRate) * 0.03;
+    }
+  }
+
+  // Stability from worker satisfaction
+  nation.stability = Math.min(95, nation.stability + 1.0);
+  nation.unrest = Math.max(0, nation.unrest - 2);
+
+  // Event: workers' council strengthens solidarity
+  if (Math.random() < 0.04) {
+    const neighbors = new Set<string>();
+    for (const e of edges) {
+      if (e.from === nation.id) neighbors.add(e.to);
+      if (e.to === nation.id) neighbors.add(e.from);
+    }
+    const workerAllies = nations.filter(
+      (n) => neighbors.has(n.id) && n.worldClass === "periphery"
+    );
+    if (workerAllies.length > 0) {
+      const ally = workerAllies[Math.floor(Math.random() * workerAllies.length)];
+      ally.socialClasses.working = Math.min(55, ally.socialClasses.working + 0.5);
+      ally.unrest = Math.max(0, ally.unrest - 3);
+      for (const e of edges) {
+        if (
+          (e.from === nation.id && e.to === ally.id) ||
+          (e.to === nation.id && e.from === ally.id)
+        ) {
+          e.volume = Math.min(500, e.volume * 1.1);
+        }
+      }
+      effects.push({
+        type: "trade",
+        text: `${nation.name}: Consejo obrero fortalece solidaridad con ${ally.name}`,
+        nationId: nation.id,
+      });
+    }
+  }
+
+  return effects;
+}
+
 // ─── Ideology Registry ──────────────────────────────────────
 
 export const IDEOLOGY_PROFILES: Record<Ideology, IdeologyProfile> = {
@@ -443,6 +780,120 @@ export const IDEOLOGY_PROFILES: Record<Ideology, IdeologyProfile> = {
     edgeWeightModifier: absolutismEdgeMod,
     ideologicalEffect: absolutismEffect,
   },
+  imperialism: {
+    productionMod: 1.10,
+    openness: 0.35,
+    idealTariff: 0.20,
+    culturalPressure: 0.6,
+    susceptibility: 0.2,
+    militaryPriority: 0.95,
+    industrialBonus: 0.3,
+    socialMobility: 0.3,
+    stabilityBonus: 5,
+    unrestGeneration: 0.3,
+    exportAffinity: "raw",
+    graphMechanic:
+      "Extrae activamente recursos de la periferia colonial. " +
+      "Fortalecimiento militar continuo, reduce estabilidad colonial. " +
+      "Flujos de extracción amplificados desde periferia (×1.2).",
+    edgeWeightModifier: imperialismEdgeMod,
+    ideologicalEffect: imperialismEffect,
+  },
+  constitutionalism: {
+    productionMod: 1.05,
+    openness: 0.7,
+    idealTariff: 0.10,
+    culturalPressure: 0.7,
+    susceptibility: 0.4,
+    militaryPriority: 0.4,
+    industrialBonus: 0.35,
+    socialMobility: 0.7,
+    stabilityBonus: 8,
+    unrestGeneration: 0.1,
+    exportAffinity: "manufactured",
+    graphMechanic:
+      "Industrialización gradual a través del estado de derecho. " +
+      "Aranceles estables y predecibles, reforma constitucional. " +
+      "Ligero boost general al comercio (×1.03).",
+    edgeWeightModifier: constitutionalismEdgeMod,
+    ideologicalEffect: constitutionalismEffect,
+  },
+  progressivism: {
+    productionMod: 1.08,
+    openness: 0.6,
+    idealTariff: 0.08,
+    culturalPressure: 0.8,
+    susceptibility: 0.5,
+    militaryPriority: 0.3,
+    industrialBonus: 0.5,
+    socialMobility: 1.2,
+    stabilityBonus: 3,
+    unrestGeneration: -0.2,
+    exportAffinity: "manufactured",
+    graphMechanic:
+      "Impulso de movilidad social e industrialización por reformas. " +
+      "Fortalece comercio entre core y semi-periferia (×1.05). " +
+      "Reduce aranceles progresivamente.",
+    edgeWeightModifier: progressivismEdgeMod,
+    ideologicalEffect: progressivismEffect,
+  },
+  anarchism: {
+    productionMod: 0.75,
+    openness: 0.95,
+    idealTariff: 0.01,
+    culturalPressure: 1.3,
+    susceptibility: 0.1,
+    militaryPriority: 0.1,
+    industrialBonus: 0.2,
+    socialMobility: 2.0,
+    stabilityBonus: -5,
+    unrestGeneration: -0.4,
+    exportAffinity: "luxury",
+    graphMechanic:
+      "Movilidad social masiva, redes de ayuda mutua. " +
+      "Fortalece periferia-periferia (×1.2), debilita vínculos core (×0.85). " +
+      "Reducción de descontento a través de la solidaridad.",
+    edgeWeightModifier: anarchismEdgeMod,
+    ideologicalEffect: anarchismEffect,
+  },
+  theocracy: {
+    productionMod: 0.88,
+    openness: 0.3,
+    idealTariff: 0.18,
+    culturalPressure: 1.0,
+    susceptibility: 0.15,
+    militaryPriority: 0.6,
+    industrialBonus: 0.1,
+    socialMobility: 0.15,
+    stabilityBonus: 15,
+    unrestGeneration: -0.6,
+    exportAffinity: "raw",
+    graphMechanic:
+      "Estabilidad masiva desde la autoridad religiosa. " +
+      "Crecimiento del poder cultural, jerarquía rígida. " +
+      "Trade neutral — el poder viene de la estabilidad, no del comercio.",
+    edgeWeightModifier: theocracyEdgeMod,
+    ideologicalEffect: theocracyEffect,
+  },
+  syndicalism: {
+    productionMod: 0.85,
+    openness: 0.55,
+    idealTariff: 0.12,
+    culturalPressure: 0.9,
+    susceptibility: 0.25,
+    militaryPriority: 0.35,
+    industrialBonus: 0.4,
+    socialMobility: 1.3,
+    stabilityBonus: 7,
+    unrestGeneration: -0.3,
+    exportAffinity: "manufactured",
+    graphMechanic:
+      "Fortalece clase trabajadora, crecimiento industrial colectivo. " +
+      "Solidaridad obrera con periferia (×1.15). " +
+      "Consejos obreros fortalecen la cooperación internacional.",
+    edgeWeightModifier: syndicalismEdgeMod,
+    ideologicalEffect: syndicalismEffect,
+  },
 };
 
 // ─── Public API ─────────────────────────────────────────────
@@ -465,7 +916,7 @@ export function applyIdeologicalEffects(
   const allEffects: IdeologyEffect[] = [];
 
   for (const nation of nations) {
-    const profile = IDEOLOGY_PROFILES[nation.ideology];
+    const profile = IDEOLOGY_PROFILES[nation.primaryIdeology];
 
     // Apply edge weight modifiers
     for (const e of edges) {
@@ -503,31 +954,79 @@ export function applyIdeologicalEffects(
 export function ideologicalAffinity(a: Ideology, b: Ideology): number {
   if (a === b) return 1.0;
 
-  // Compatibility matrix
+  // Compatibility matrix (12 ideologies)
   const compat: Record<Ideology, Record<Ideology, number>> = {
     mercantilism: {
       mercantilism: 1.0, liberalism: 0.6, marxism: 0.2,
       nationalism: 0.7, conservatism: 0.8, absolutism: 0.9,
+      imperialism: 0.95, constitutionalism: 0.5, progressivism: 0.3,
+      anarchism: 0.1, theocracy: 0.6, syndicalism: 0.15,
     },
     liberalism: {
       mercantilism: 0.6, liberalism: 1.0, marxism: 0.4,
       nationalism: 0.3, conservatism: 0.5, absolutism: 0.2,
+      imperialism: 0.3, constitutionalism: 0.9, progressivism: 0.85,
+      anarchism: 0.5, theocracy: 0.2, syndicalism: 0.35,
     },
     marxism: {
       mercantilism: 0.2, liberalism: 0.4, marxism: 1.0,
       nationalism: 0.3, conservatism: 0.2, absolutism: 0.1,
+      imperialism: 0.1, constitutionalism: 0.4, progressivism: 0.7,
+      anarchism: 0.6, theocracy: 0.05, syndicalism: 0.85,
     },
     nationalism: {
       mercantilism: 0.7, liberalism: 0.3, marxism: 0.3,
       nationalism: 1.0, conservatism: 0.6, absolutism: 0.5,
+      imperialism: 0.8, constitutionalism: 0.4, progressivism: 0.3,
+      anarchism: 0.15, theocracy: 0.5, syndicalism: 0.25,
     },
     conservatism: {
       mercantilism: 0.8, liberalism: 0.5, marxism: 0.2,
       nationalism: 0.6, conservatism: 1.0, absolutism: 0.8,
+      imperialism: 0.7, constitutionalism: 0.75, progressivism: 0.4,
+      anarchism: 0.05, theocracy: 0.85, syndicalism: 0.15,
     },
     absolutism: {
       mercantilism: 0.9, liberalism: 0.2, marxism: 0.1,
       nationalism: 0.5, conservatism: 0.8, absolutism: 1.0,
+      imperialism: 0.85, constitutionalism: 0.3, progressivism: 0.15,
+      anarchism: 0.05, theocracy: 0.9, syndicalism: 0.1,
+    },
+    imperialism: {
+      mercantilism: 0.95, liberalism: 0.3, marxism: 0.1,
+      nationalism: 0.8, conservatism: 0.7, absolutism: 0.85,
+      imperialism: 1.0, constitutionalism: 0.35, progressivism: 0.2,
+      anarchism: 0.05, theocracy: 0.55, syndicalism: 0.1,
+    },
+    constitutionalism: {
+      mercantilism: 0.5, liberalism: 0.9, marxism: 0.4,
+      nationalism: 0.4, conservatism: 0.75, absolutism: 0.3,
+      imperialism: 0.35, constitutionalism: 1.0, progressivism: 0.85,
+      anarchism: 0.3, theocracy: 0.35, syndicalism: 0.4,
+    },
+    progressivism: {
+      mercantilism: 0.3, liberalism: 0.85, marxism: 0.7,
+      nationalism: 0.3, conservatism: 0.4, absolutism: 0.15,
+      imperialism: 0.2, constitutionalism: 0.85, progressivism: 1.0,
+      anarchism: 0.55, theocracy: 0.15, syndicalism: 0.7,
+    },
+    anarchism: {
+      mercantilism: 0.1, liberalism: 0.5, marxism: 0.6,
+      nationalism: 0.15, conservatism: 0.05, absolutism: 0.05,
+      imperialism: 0.05, constitutionalism: 0.3, progressivism: 0.55,
+      anarchism: 1.0, theocracy: 0.05, syndicalism: 0.6,
+    },
+    theocracy: {
+      mercantilism: 0.6, liberalism: 0.2, marxism: 0.05,
+      nationalism: 0.5, conservatism: 0.85, absolutism: 0.9,
+      imperialism: 0.55, constitutionalism: 0.35, progressivism: 0.15,
+      anarchism: 0.05, theocracy: 1.0, syndicalism: 0.1,
+    },
+    syndicalism: {
+      mercantilism: 0.15, liberalism: 0.35, marxism: 0.85,
+      nationalism: 0.25, conservatism: 0.15, absolutism: 0.1,
+      imperialism: 0.1, constitutionalism: 0.4, progressivism: 0.7,
+      anarchism: 0.6, theocracy: 0.1, syndicalism: 1.0,
     },
   };
 
@@ -552,11 +1051,11 @@ export function neighborhoodIdeologyPressure(
     const partner = nations.find((n) => n.id === partnerId);
     if (!partner) continue;
 
-    const profile = IDEOLOGY_PROFILES[partner.ideology];
+    const profile = IDEOLOGY_PROFILES[partner.primaryIdeology];
     const pressureValue = profile.culturalPressure * Math.sqrt(e.volume) * 0.01;
     pressure.set(
-      partner.ideology,
-      (pressure.get(partner.ideology) ?? 0) + pressureValue
+      partner.primaryIdeology,
+      (pressure.get(partner.primaryIdeology) ?? 0) + pressureValue
     );
   }
 

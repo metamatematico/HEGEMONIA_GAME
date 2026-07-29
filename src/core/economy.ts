@@ -23,7 +23,7 @@ export function phaseProduction(nations: NationNode[]): void {
     const indMultiplier = 1 + n.industrialization / 100;
 
     // Ideology modifiers on production
-    const ideologyMod = productionIdeologyModifier(n.ideology);
+    const ideologyMod = productionIdeologyModifier(n.primaryIdeology);
 
     // Population factor (diminishing returns)
     const popFactor = Math.min(2, Math.sqrt(n.population / 10));
@@ -51,13 +51,19 @@ export function phaseProduction(nations: NationNode[]): void {
 
 function productionIdeologyModifier(ideology: Ideology): number {
   switch (ideology) {
-    case "mercantilism":  return 1.15;  // State-sponsored production
-    case "liberalism":    return 1.10;  // Market efficiency
-    case "marxism":       return 0.90;  // Restructuring overhead
-    case "nationalism":   return 1.12;  // Militarized industry
-    case "conservatism":  return 0.95;  // Slow to adapt
-    case "absolutism":    return 0.85;  // Inefficient central planning
-    default:              return 1.0;
+    case "mercantilism":       return 1.15;  // State-sponsored production
+    case "liberalism":         return 1.10;  // Market efficiency
+    case "marxism":            return 0.90;  // Restructuring overhead
+    case "nationalism":       return 1.12;  // Militarized industry
+    case "conservatism":      return 0.95;  // Slow to adapt
+    case "absolutism":         return 0.85;  // Inefficient central planning
+    case "imperialism":        return 1.10;  // Colonial extraction bonus
+    case "constitutionalism":  return 1.05;  // Stable regulated production
+    case "progressivism":      return 1.08;  // Reform-driven growth
+    case "anarchism":          return 0.80;  // Disorganized production
+    case "theocracy":          return 0.90;  // Religious constraints
+    case "syndicalism":        return 0.88;  // Worker-managed inefficiency
+    default:                    return 1.0;
   }
 }
 
@@ -81,7 +87,7 @@ export function phaseTrade(nations: NationNode[], edges: TradeEdge[]): GameLogEn
     const tariffEffect = 1 - (e.tariffRate * 0.3);
 
     // Ideology trade modifiers
-    const tradeMod = tradeIdeologyModifier(from.ideology, to.ideology);
+    const tradeMod = tradeIdeologyModifier(from.primaryIdeology, to.primaryIdeology);
 
     // Distance penalty (based on graph distance)
     const dx = from.x - to.x;
@@ -163,14 +169,20 @@ interface GameLogEntry {
 function tradeIdeologyModifier(fromIdeology: Ideology, toIdeology: Ideology): number {
   // Same ideology = better trade relations
   if (fromIdeology === toIdeology) return 1.1;
-  // Compatible pairs
+  // Compatible pairs (all 12 ideologies)
   const compatible: Record<string, Ideology[]> = {
-    mercantilism: ["conservatism", "absolutism"],
-    liberalism: ["mercantilism", "conservatism"],
-    nationalism: ["absolutism", "conservatism"],
-    conservatism: ["mercantilism", "liberalism", "nationalism", "absolutism"],
-    absolutism: ["conservatism", "nationalism"],
-    marxism: [],
+    mercantilism: ["conservatism", "absolutism", "imperialism"],
+    liberalism: ["mercantilism", "conservatism", "constitutionalism", "progressivism"],
+    nationalism: ["absolutism", "conservatism", "imperialism"],
+    conservatism: ["mercantilism", "liberalism", "nationalism", "absolutism", "constitutionalism", "theocracy"],
+    absolutism: ["conservatism", "nationalism", "imperialism", "theocracy"],
+    marxism: ["syndicalism", "anarchism", "progressivism"],
+    imperialism: ["mercantilism", "nationalism", "absolutism"],
+    constitutionalism: ["liberalism", "conservatism", "progressivism"],
+    progressivism: ["liberalism", "constitutionalism", "syndicalism", "marxism"],
+    anarchism: ["syndicalism", "marxism", "liberalism"],
+    theocracy: ["conservatism", "absolutism"],
+    syndicalism: ["marxism", "anarchism", "progressivism"],
   };
   if (compatible[fromIdeology]?.includes(toIdeology)) return 1.0;
   return 0.9; // default penalty for incompatible ideologies
@@ -226,7 +238,7 @@ export function phaseIdeologicalSpread(nations: NationNode[], edges: TradeEdge[]
 
       // Cultural power + trade volume = pressure
       const pressure = partner.culturalPower * 0.01 * Math.sqrt(vol);
-      ideologyPressure.set(partner.ideology, (ideologyPressure.get(partner.ideology) ?? 0) + pressure);
+      ideologyPressure.set(partner.primaryIdeology, (ideologyPressure.get(partner.primaryIdeology) ?? 0) + pressure);
       totalPressure += pressure;
     }
 
@@ -239,15 +251,15 @@ export function phaseIdeologicalSpread(nations: NationNode[], edges: TradeEdge[]
       let maxPressure = 0;
       let newIdeology: Ideology | null = null;
       for (const [ideo, pressure] of ideologyPressure) {
-        if (pressure > maxPressure && ideo !== n.ideology) {
+        if (pressure > maxPressure && ideo !== n.primaryIdeology) {
           maxPressure = pressure;
           newIdeology = ideo;
         }
       }
 
       if (newIdeology && maxPressure > totalPressure * 0.35) {
-        const oldIdeology = n.ideology;
-        n.ideology = newIdeology;
+        const oldIdeology = n.primaryIdeology;
+        n.primaryIdeology = newIdeology;
         events.push({
           type: "ideology",
           text: `${n.name}: Ideología cambia de ${oldIdeology} a ${newIdeology}`,
@@ -330,8 +342,10 @@ export function computeMilitaryPower(n: NationNode): number {
   const ideologyBonus: Record<Ideology, number> = {
     mercantilism: 1.1, liberalism: 0.9, marxism: 1.2,
     nationalism: 1.3, conservatism: 1.0, absolutism: 1.15,
+    imperialism: 1.25, constitutionalism: 1.0, progressivism: 0.9,
+    anarchism: 0.85, theocracy: 1.1, syndicalism: 1.15,
   };
-  return clamp(Math.round(base * (ideologyBonus[n.ideology] ?? 1)), 1, 100);
+  return clamp(Math.round(base * (ideologyBonus[n.primaryIdeology] ?? 1)), 1, 100);
 }
 
 /**

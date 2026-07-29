@@ -6,7 +6,7 @@
 import { create } from "zustand";
 import type {
   GameState, NationNode, TradeEdge, GameEvent, GDPSnapshot, Phase,
-  PlayerActionType, PlayerAction,
+  PlayerActionType, PlayerAction, PlayerProfile, Ideology,
 } from "@/core/types";
 import { IDEOLOGY_INFO } from "@/core/types";
 import { createGameState, runTurn, runPhase } from "@/core/simulation";
@@ -29,6 +29,14 @@ interface ClassCounts {
 interface HegemoniaStore {
   // Core state
   gameState: GameState;
+
+  // Game flow
+  gameScreen: "intro" | "setup" | "playing";
+  showIntro: boolean;
+  isInSetup: boolean;
+
+  // Player profile (persisted for setup)
+  playerProfile: PlayerProfile | null;
 
   // UI state
   selectedNationId: string | null;
@@ -62,6 +70,17 @@ interface HegemoniaStore {
   queuePlayerAction: (type: PlayerActionType, targetId?: string) => void;
   setActionTarget: (id: string | null) => void;
   clearActionResult: () => void;
+
+  // Game flow actions
+  setGameScreen: (screen: "intro" | "setup" | "playing") => void;
+  setShowIntro: (show: boolean) => void;
+  backToSetup: () => void;
+  startNewGame: (profile: PlayerProfile) => void;
+}
+
+/** Helper: get all ideologies of a nation (primary + secondary) */
+function getAllIdeologies(n: NationNode): Ideology[] {
+  return [n.primaryIdeology, ...n.secondaryIdeologies];
 }
 
 function computeDerived(state: GameState) {
@@ -81,7 +100,11 @@ function computeDerived(state: GameState) {
   };
 
   const ideoCounts: Record<string, number> = {};
-  for (const n of nations) ideoCounts[n.ideology] = (ideoCounts[n.ideology] ?? 0) + 1;
+  for (const n of nations) {
+    for (const ideo of getAllIdeologies(n)) {
+      ideoCounts[ideo] = (ideoCounts[ideo] ?? 0) + 1;
+    }
+  }
   const ideologyCounts: IdeologyCount[] = Object.entries(IDEOLOGY_INFO).map(([key, info]) => ({
     ...info,
     count: ideoCounts[key] ?? 0,
@@ -119,6 +142,10 @@ export const useHegemoniaStore = create<HegemoniaStore>((set, get) => {
   return {
     gameState: initial,
     ...derived,
+    gameScreen: "intro",
+    showIntro: true,
+    isInSetup: false,
+    playerProfile: null,
     selectedNationId: "gb",
     activeTab: "detail",
     currentPhaseIndex: 0,
@@ -193,5 +220,45 @@ export const useHegemoniaStore = create<HegemoniaStore>((set, get) => {
       }),
 
     setIsStepMode: (step) => set({ isStepMode: step }),
+
+    // Game flow actions
+    setGameScreen: (screen) =>
+      set({
+        gameScreen: screen,
+        showIntro: screen === "intro",
+        isInSetup: screen === "setup",
+      }),
+
+    setShowIntro: (show) =>
+      set({ showIntro: show, gameScreen: show ? "intro" : "setup", isInSetup: !show }),
+
+    backToSetup: () =>
+      set({ gameScreen: "setup", isInSetup: true, showIntro: false }),
+
+    startNewGame: (profile) =>
+      set((s) => {
+        const newState = createGameState();
+        // Set the selected nation as player
+        const playerNation = newState.nations.find((n) => n.id === profile.nationId);
+        if (playerNation) {
+          playerNation.isPlayer = true;
+          playerNation.primaryIdeology = profile.primaryIdeology;
+          playerNation.secondaryIdeologies = [...profile.secondaryIdeologies];
+          playerNation.culturalTrait = profile.trait;
+        }
+        return {
+          gameState: newState,
+          ...computeDerived(newState),
+          playerProfile: profile,
+          selectedNationId: profile.nationId,
+          gameScreen: "playing",
+          isInSetup: false,
+          showIntro: false,
+          currentPhaseIndex: 0,
+          isStepMode: false,
+          actionTargetId: null,
+          lastActionResult: null,
+        };
+      }),
   };
 });

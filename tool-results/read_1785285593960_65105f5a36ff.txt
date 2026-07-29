@@ -1,0 +1,675 @@
+     1→     1→// ============================================================
+     2→     2→// Hegemonía Core Engine — Type Definitions v3.0
+     3→     3→// ============================================================
+     4→     4→// Expanded: 12 ideologies (multi-select), 12 cultural traits,
+     5→     5→// 10 strategic focuses, victory/defeat conditions
+     6→     6→
+     7→     7→/** World-systems class based on Wallerstein's theory */
+     8→     8→export type WorldClass = "core" | "semi" | "periphery";
+     9→     9→
+    10→    10→/** The 12 ideologies — each reshapes the graph differently */
+    11→    11→export type Ideology =
+    12→    12→  // ─── Original 6 ───
+    13→    13→  | "mercantilism"     // State-protected trade, accumulation
+    14→    14→  | "liberalism"        // Free markets, constitutional government
+    15→    15→  | "marxism"           // Workers' revolution, collective ownership
+    16→    16→  | "nationalism"       // National unity, military strength
+    17→    17→  | "conservatism"      // Tradition, hierarchy, order
+    18→    18→  | "absolutism"        // Absolute monarchy, centralized power
+    19→    19→  // ─── New 6 ───
+    20→    20→  | "imperialism"       // Colonial empire, extraction from periphery
+    21→    21→  | "constitutionalism"// Constitutional monarchy, balance of powers
+    22→    22→  | "progressivism"     // Social reform, gradual modernization
+    23→    23→  | "anarchism"         // Anti-state, direct action, mutual aid
+    24→    24→  | "theocracy"         // Religious law, divine mandate
+    25→    25→  | "syndicalism";      // Trade unions, workers' self-management
+    26→    26→
+    27→    27→/** Ideology synergy/conflict pairs */
+    28→    28→export const IDEOLOGY_SYNERGIES: [Ideology, Ideology][] = [
+    29→    29→  ["mercantilism", "imperialism"],
+    30→    30→  ["liberalism", "constitutionalism"],
+    31→    31→  ["liberalism", "progressivism"],
+    32→    32→  ["marxism", "syndicalism"],
+    33→    33→  ["marxism", "anarchism"],
+    34→    34→  ["nationalism", "imperialism"],
+    35→    35→  ["conservatism", "theocracy"],
+    36→    36→  ["conservatism", "constitutionalism"],
+    37→    37→  ["progressivism", "syndicalism"],
+    38→    38→  ["anarchism", "syndicalism"],
+    39→    39→  ["absolutism", "theocracy"],
+    40→    40→  ["absolutism", "imperialism"],
+    41→    41→  ["mercantilism", "conservatism"],
+    42→    42→  ["liberalism", "anarchism"],
+    43→    43→  ["nationalism", "conservatism"],
+    44→    44→  ["progressivism", "constitutionalism"],
+    45→    45→];
+    46→    46→
+    47→    47→export const IDEOLOGY_CONFLICTS: [Ideology, Ideology][] = [
+    48→    48→  ["liberalism", "absolutism"],
+    49→    49→  ["marxism", "mercantilism"],
+    50→    50→  ["marxism", "conservatism"],
+    51→    51→  ["anarchism", "absolutism"],
+    52→    52→  ["anarchism", "imperialism"],
+    53→    53→  ["liberalism", "theocracy"],
+    54→    54→  ["nationalism", "anarchism"],
+    55→    55→  ["syndicalism", "absolutism"],
+    56→    56→  ["progressivism", "absolutism"],
+    57→    57→  ["progressivism", "theocracy"],
+    58→    58→  ["constitutionalism", "absolutism"],
+    59→    59→  ["marxism", "nationalism"],
+    60→    60→  ["imperialism", "anarchism"],
+    61→    61→  ["theocracy", "liberalism"],
+    62→    62→  ["conservatism", "anarchism"],
+    63→    63→];
+    64→    64→
+    65→    65→/** Trade flow type */
+    66→    66→export type TradeType = "raw" | "manufactured" | "luxury";
+    67→    67→
+    68→    68→/** Event type for the game log */
+    69→    69→export type EventType = "trade" | "war" | "revolution" | "crisis" | "diplomacy" | "ideology";
+    70→    70→
+    71→    71→/** Social classes within a nation */
+    72→    72→export interface SocialClasses {
+    73→    73→  elite: number;     // % 0-100
+    74→    74→  middle: number;    // % 0-100
+    75→    75→  working: number;   // % 0-100
+    76→    76→  peasant: number;   // % 0-100
+    77→    77→}
+    78→    78→
+    79→    79→/** Resource levels of a nation */
+    80→    80→export interface Resources {
+    81→    81→  coal: number;      // 0-100
+    82→    82→  iron: number;      // 0-100
+    83→    83→  grain: number;     // 0-100
+    84→    84→  cotton: number;    // 0-100
+    85→    85→}
+    86→    86→
+    87→    87→/** A nation node in the world graph */
+    88→    88→export interface NationNode {
+    89→    89→  id: string;
+    90→    90→  name: string;
+    91→    91→  flag: string;
+    92→    92→  worldClass: WorldClass;
+    93→    93→  primaryIdeology: Ideology;
+    94→    94→  secondaryIdeologies: Ideology[];  // 0-2 additional ideologies (coalitions)
+    95→    95→
+    96→    96→  // Economy
+    97→    97→  gdp: number;           // billions (arbitrary scale)
+    98→    98→  population: number;    // millions
+    99→    99→  tradeBalance: number;  // surplus(+)/deficit(-) millions
+   100→   100→
+   101→   101→  // Power dimensions (0-100)
+   102→   102→  militaryPower: number;
+   103→   103→  culturalPower: number;
+   104→   104→  diplomaticPower: number;
+   105→   105→
+   106→   106→  // Graph position (0-100 for rendering)
+   107→   107→  x: number;
+   108→   108→  y: number;
+   109→   109→
+   110→   110→  // Graph metrics (computed each turn)
+   111→   111→  eigenvectorCentrality: number;  // 0-1
+   112→   112→  betweennessCentrality: number;  // 0-1
+   113→   113→
+   114→   114→  // Resources
+   115→   115→  resources: Resources;
+   116→   116→
+   117→   117→  // Social structure
+   118→   118→  socialClasses: SocialClasses;
+   119→   119→
+   120→   120→  // State for NPC AI
+   121→   121→  stability: number;      // 0-100, affects revolution risk
+   122→   122→  unrest: number;         // 0-100, rises when stability drops
+   123→   123→  industrialization: number; // 0-100, tech progress
+   124→   124→
+   125→   125→  // Player control
+   126→   126→  isPlayer: boolean;
+   127→   127→
+   128→   128→  // Cultural trait (NPC-inferred or player-chosen)
+   129→   129→  culturalTrait: CulturalTrait;
+   130→   130→}
+   131→   131→
+   132→   132→/** A trade edge in the world graph */
+   133→   133→export interface TradeEdge {
+   134→   134→  id: string;
+   135→   135→  from: string;     // nation id
+   136→   136→  to: string;       // nation id
+   137→   137→  volume: number;   // trade volume in millions
+   138→   138→  type: TradeType;
+   139→   139→  tariffRate: number; // 0-1, affected by ideology
+   140→   140→}
+   141→   141→
+   142→   142→/** An event in the game log */
+   143→   143→export interface GameEvent {
+   144→   144→  id: string;
+   145→   145→  turn: number;
+   146→   146→  text: string;
+   147→   147→  type: EventType;
+   148→   148→  nationId?: string;
+   149→   149→}
+   150→   150→
+   151→   151→/** Historical GDP snapshot for charts */
+   152→   152→export interface GDPSnapshot {
+   153→   153→  turn: number;
+   154→   154→  year: number;
+   155→   155→  data: Record<string, number>; // nationId -> GDP
+   156→   156→}
+   157→   157→
+   158→   158→// ─── Victory / Defeat ────────────────────────────────────────
+   159→   159→
+   160→   160→export type VictoryCondition =
+   161→   161→  | "dominación_económica"
+   162→   162→  | "hegemonía_total"
+   163→   163→  | "victoria_ideológica"
+   164→   164→  | "supremacía_científica"
+   165→   165→  | "imperio_comercial"
+   166→   166→  | "hegemonía_diplomática"
+   167→   167→  | "dominación_cultural"
+   168→   168→  | "imperio_colonial";
+   169→   169→
+   170→   170→export type DefeatCondition =
+   171→   171→  | "revolución_interna"
+   172→   172→  | "ruina_económica"
+   173→   173→  | "colapso_periférico"
+   174→   174→  | "conquista_militar"
+   175→   175→  | "aislamiento_comercial"
+   176→   176→  | "sobreextensión"
+   177→   177→  | "crisis_de_deuda";
+   178→   178→
+   179→   179→export interface GameOverResult {
+   180→   180→  type: "victory" | "defeat";
+   181→   181→  condition: string;
+   182→   182→  reason: string;
+   183→   183→  score: number;
+   184→   184→  rank: number;
+   185→   185→  totalNations: number;
+   186→   186→  turn: number;
+   187→   187→  year: number;
+   188→   188→}
+   189→   189→
+   190→   190→// ─── Game Mode & Difficulty ──────────────────────────────────
+   191→   191→
+   192→   192→export type GameMode = "ai" | "human";
+   193→   193→export type AIDifficulty = "easy" | "normal" | "hard" | "expert";
+   194→   194→
+   195→   195→/** Complete game state */
+   196→   196→export interface GameState {
+   197→   197→  turn: number;
+   198→   198→  year: number;
+   199→   199→  nations: NationNode[];
+   200→   200→  edges: TradeEdge[];
+   201→   201→  events: GameEvent[];
+   202→   202→  historicalGDP: GDPSnapshot[];
+   203→   203→  isPaused: boolean;
+   204→   204→  speed: number; // ms per turn
+   205→   205→  lastPhase: string; // for UI display
+   206→   206→
+   207→   207→  // Game mode
+   208→   208→  gameMode: GameMode;
+   209→   209→  aiDifficulty: AIDifficulty;
+   210→   210→
+   211→   211→  // Player state
+   212→   212→  playerActionQueue: PlayerAction[];
+   213→   213→  playerCooldowns: CooldownMap;
+   214→   214→  playerActionsUsedThisTurn: number;
+   215→   215→  maxActionsPerTurn: number;
+   216→   216→
+   217→   217→  // Game Over
+   218→   218→  gameOver: GameOverResult | null;
+   219→   219→
+   220→   220→  // Player Profile
+   221→   221→  playerProfile: PlayerProfile | null;
+   222→   222→
+   223→   223→  // Stability tracking for defeat conditions
+   224→   224→  lowStabilityTurns: number;
+   225→   225→  zeroTradeTurns: number;
+   226→   226→  peripheryTurns: number;
+   227→   227→  lowMilitaryTurns: number;
+   228→   228→
+   229→   229→  // NPC AI tracking
+   230→   230→  lastNPCActions: NPCAction[];
+   231→   231→}
+   232→   232→
+   233→   233→/** NPC action decision */
+   234→   234→export interface NPCAction {
+   235→   235→  nationId: string;
+   236→   236→  action: string;
+   237→   237→  targetId?: string;
+   238→   238→  utility: number;
+   239→   239→  reasoning: string;
+   240→   240→  turn?: number;
+   241→   241→}
+   242→   242→
+   243→   243→// ─── Player Action System ─────────────────────────────────────
+   244→   244→
+   245→   245→export type PlayerActionType =
+   246→   246→  // ─── BASE (10) ───
+   247→   247→  | "invest_industry"
+   248→   248→  | "build_military"
+   249→   249→  | "lower_tariffs"
+   250→   250→  | "raise_tariffs"
+   251→   251→  | "seek_trade"
+   252→   252→  | "spread_ideology"
+   253→   253→  | "suppress_unrest"
+   254→   254→  | "build_infrastructure"
+   255→   255→  | "diplomatic_pressure"
+   256→   256→  | "colonial_expansion"
+   257→   257→  // ─── SPIRITUAL (trait) ───
+   258→   258→  | "evangelize"
+   259→   259→  | "religious_festival"
+   260→   260→  | "missionary_schools"
+   261→   261→  | "holy_war"
+   262→   262→  | "spiritual_retreat"
+   263→   263→  | "pilgrimage_routes"
+   264→   264→  // ─── MARITIME (trait) ───
+   265→   265→  | "naval_expedition"
+   266→   266→  | "blockade"
+   267→   267→  | "naval_base"
+   268→   268→  | "pirate_suppression"
+   269→   269→  | "overseas_colony"
+   270→   270→  // ─── INNOVATIVE (trait) ───
+   271→   271→  | "fund_research"
+   272→   272→  | "patent_office"
+   273→   273→  | "technical_exchange"
+   274→   274→  | "industrial_espionage"
+   275→   275→  | "universities"
+   276→   276→  // ─── WARLIKE (trait) ───
+   277→   277→  | "declare_war"
+   278→   278→  | "fortify_borders"
+   279→   279→  | "military_alliance"
+   280→   280→  | "coercion"
+   281→   281→  | "scorched_earth"
+   282→   282→  // ─── MERCANTILE (trait) ───
+   283→   283→  | "trade_monopoly"
+   284→   284→  | "merchant_guilds"
+   285→   285→  | "free_port"
+   286→   286→  | "tariff_war"
+   287→   287→  | "smugglers"
+   288→   288→  // ─── EXPANSIONIST (trait) ───
+   289→   289→  | "territorial_claim"
+   290→   290→  | "manifest_destiny"
+   291→   291→  | "settlers"
+   292→   292→  | "resource_extraction"
+   293→   293→  | "treaty_annexation"
+   294→   294→  // ─── IDEOLOGY-SPECIFIC (1 per ideology) ───
+   295→   295→  | "redistribute_wealth"
+   296→   296→  | "propaganda_campaign"
+   297→   297→  | "traditional_reforms"
+   298→   298→  | "royal_decree"
+   299→   299→  | "free_trade_agreement"
+   300→   300→  | "mercantilist_monopoly"
+   301→   301→  | "colonial_dominion"
+   302→   302→  | "constitutional_reform"
+   303→   303→  | "social_programs"
+   304→   304→  | "commune uprising"
+   305→   305→  | "divine_proclamation"
+   306→   306→  | "general_strike";
+   307→   307→
+   308→   308→export interface PlayerAction {
+   309→   309→  id: string;
+   310→   310→  type: PlayerActionType;
+   311→   311→  targetId?: string;
+   312→   312→  queuedTurn: number;
+   313→   313→}
+   314→   314→
+   315→   315→export type CooldownMap = Partial<Record<PlayerActionType, number>>;
+   316→   316→
+   317→   317→export type ActionOrigin = "base" | "trait" | "ideology";
+   318→   318→
+   319→   319→export interface PlayerActionMeta {
+   320→   320→  type: PlayerActionType;
+   321→   321→  label: string;
+   322→   322→  icon: string;
+   323→   323→  description: string;
+   324→   324→  cost: number;
+   325→   325→  cooldown: number;
+   326→   326→  requiresTarget: boolean;
+   327→   327→  category: "economy" | "military" | "diplomacy" | "ideology" | "control"
+   328→   328→    | "spiritual" | "naval" | "science" | "conquest" | "trade" | "expansion";
+   329→   329→  minStability?: number;
+   330→   330→  ideologyBonus?: Ideology[];
+   331→   331→  origin: ActionOrigin;
+   332→   332→  traitRequired?: CulturalTrait;
+   333→   333→  ideologyRequired?: Ideology;
+   334→   334→  categoryLabel: string;
+   335→   335→}
+   336→   336→
+   337→   337→/** Phase of the game loop */
+   338→   338→export type Phase =
+   339→   339→  | "production"
+   340→   340→  | "trade"
+   341→   341→  | "ideological_spread"
+   342→   342→  | "class_dynamics"
+   343→   343→  | "npc_decisions"
+   344→   344→  | "player_decisions"
+   345→   345→  | "classification_update"
+   346→   346→  | "metrics_update";
+   347→   347→
+   348→   348→export const PHASE_LABELS: Record<Phase, string> = {
+   349→   349→  production: "① Producción",
+   350→   350→  trade: "② Comercio",
+   351→   351→  ideological_spread: "③ Spread Ideológico",
+   352→   352→  class_dynamics: "④ Dinámica de Clases",
+   353→   353→  npc_decisions: "⑤ Decisiones NPC",
+   354→   354→  player_decisions: "⑥ Decisiones Jugador",
+   355→   355→  classification_update: "⑦ Clasificación",
+   356→   356→  metrics_update: "⑧ Métricas",
+   357→   357→};
+   358→   358→
+   359→   359→// ─── Ideology Display Info (12) ──────────────────────────────
+   360→   360→
+   361→   361→export const IDEOLOGY_INFO: Record<Ideology, { name: string; icon: string; color: string; desc: string; era: string }> = {
+   362→   362→  mercantilism:       { name: "Mercantilismo",       icon: "💰", color: "#f59e0b", desc: "Proteccionismo y acumulación de riqueza",                    era: "XVI-XIX" },
+   363→   363→  liberalism:         { name: "Liberalismo",         icon: "⚖️", color: "#06b6d4", desc: "Libre comercio y competencia de mercado",                   era: "XVIII-XX" },
+   364→   364→  marxism:            { name: "Socialismo",          icon: "✊", color: "#10b981", desc: "Clase trabajadora y propiedad colectiva",                    era: "XIX-XX" },
+   365→   365→  nationalism:        { name: "Nacionalismo",        icon: "🏛️", color: "#ef4444", desc: "Unificación nacional y poder estatal",                     era: "XIX-XX" },
+   366→   366→  conservatism:       { name: "Conservadurismo",     icon: "👑", color: "#a855f7", desc: "Tradición, orden jerárquico y estabilidad",                   era: "XVIII-XX" },
+   367→   367→  absolutism:         { name: "Absolutismo",         icon: "🏰", color: "#64748b", desc: "Poder centralizado y control total",                        era: "XVI-XIX" },
+   368→   368→  imperialism:        { name: "Imperialismo",        icon: "🏴", color: "#dc2626", desc: "Dominio colonial y extracción de periferias",               era: "XIX-XX" },
+   369→   369→  constitutionalism:  { name: "Constitucionalismo", icon: "📜", color: "#8b5cf6", desc: "Monarquía constitucional, equilibrio de poderes",            era: "XIX-XX" },
+   370→   370→  progressivism:      { name: "Progresismo",        icon: "🔧", color: "#14b8a6", desc: "Reforma social y modernización gradual",                    era: "XIX-XX" },
+   371→   371→  anarchism:          { name: "Anarquismo",          icon: "🔥", color: "#f97316", desc: "Anti-estado, acción directa y ayuda mutua",                era: "XIX-XX" },
+   372→   372→  theocracy:          { name: "Teocracia",           icon: "☪️", color: "#eab308", desc: "Gobierno religioso y mandato divino",                      era: "varios" },
+   373→   373→  syndicalism:        { name: "Sindicalismo",        icon: "⚒️", color: "#84cc16", desc: "Sindicatos y autogestión obrera",                         era: "XIX-XX" },
+   374→   374→};
+   375→   375→
+   376→   376→// ─── World-class display info ────────────────────────────────
+   377→   377→
+   378→   378→export const CLASS_INFO: Record<WorldClass, { label: string; color: string; bgColor: string }> = {
+   379→   379→  core:       { label: "Core",           color: "#06b6d4", bgColor: "rgba(6,182,212,0.15)" },
+   380→   380→  semi:       { label: "Semi-Periferia",  color: "#f59e0b", bgColor: "rgba(245,158,11,0.15)" },
+   381→   381→  periphery:  { label: "Periferia",       color: "#64748b", bgColor: "rgba(100,116,139,0.15)" },
+   382→   382→};
+   383→   383→
+   384→   384→// ─── Player Profile ────────────────────────────────────────────
+   385→   385→
+   386→   386→export type StrategicFocus =
+   387→   387→  | "industrialist"   // GDP + industrialization focus
+   388→   388→  | "militarist"      // Military + conquest
+   389→   389→  | "diplomat"         // Trade + alliances
+   390→   390→  | "culturalist"      // Ideology + cultural spread
+   391→   391→  | "balanced"         // No particular bias
+   392→   392→  | "colonialist"      // Extraction + expansion
+   393→   393→  | "scientist"        // Research + innovation
+   394→   394→  | "merchant"         // Pure trade maximization
+   395→   395→  | "revolutionary"    // Spread ideology + destabilize rivals
+   396→   396→  | "isolationist";    // Defense + self-sufficiency
+   397→   397→
+   398→   398→export type CulturalTrait =
+   399→   399→  | "seafaring"        // +trade range, bonus to seek_trade
+   400→   400→  | "innovative"       // +industrialization speed
+   401→   401→  | "warlike"          // +military power growth
+   402→   402→  | "mercantile"       // +GDP from trade routes
+   403→   403→  | "spiritual"        // +stability, -unrest
+   404→   404→  | "expansionist"     // +colonial efficiency
+   405→   405→  | "agrarian"         // +food production, population growth
+   406→   406→  | "industrial"       // +manufacturing efficiency
+   407→   407→  | "scholarly"        // +cultural power, research speed
+   408→   408→  | "nomadic"          // +military mobility, border flexibility
+   409→   409→  | "diplomatic"       // +diplomatic power, alliance bonus
+   410→   410→  | "fortified";       // +defense, stability under siege
+   411→   411→
+   412→   412→export interface PlayerProfile {
+   413→   413→  nationId: string;
+   414→   414→  primaryIdeology: Ideology;
+   415→   415→  secondaryIdeologies: Ideology[];  // 0-2 more
+   416→   416→  focus: StrategicFocus;
+   417→   417→  trait: CulturalTrait;
+   418→   418→}
+   419→   419→
+   420→   420→// ─── Extended Info for Setup Screen ──────────────────────────
+   421→   421→
+   422→   422→export const IDEOLOGY_EXTENDED: Record<Ideology, {
+   423→   423→  name: string; icon: string; color: string; desc: string;
+   424→   424→  philosophy: string; economicModel: string; militaryPolicy: string;
+   425→   425→  bonuses: string[]; penalties: string[];
+   426→   426→  synergies: Ideology[]; conflicts: Ideology[];
+   427→   427→}> = {
+   428→   428→  mercantilism: {
+   429→   429→    name: "Mercantilismo", icon: "💰", color: "#f59e0b",
+   430→   430→    desc: "Proteccionismo y acumulación de riqueza nacional",
+   431→   431→    philosophy: "La riqueza se mide por reservas de oro y balanza comercial positiva.",
+   432→   432→    economicModel: "Aranceles altos, exportaciones maximizadas, importaciones minimizadas.",
+   433→   433→    militaryPolicy: "Fuerza naval para proteger rutas comerciales.",
+   434→   434→    bonuses: ["+20% efectividad de aranceles", "+15% GDP de exportaciones"],
+   435→   435→    penalties: ["-10% crecimiento por falta de competencia"],
+   436→   436→    synergies: ["imperialism", "conservatism"], conflicts: ["marxism", "anarchism"],
+   437→   437→  },
+   438→   438→  liberalism: {
+   439→   439→    name: "Liberalismo", icon: "⚖️", color: "#06b6d4",
+   440→   440→    desc: "Libre comercio y competencia de mercado",
+   441→   441→    philosophy: "El libre intercambio enriquece a todas las naciones.",
+   442→   442→    economicModel: "Aranceles bajos, libre competencia, inversiones extranjeras.",
+   443→   443→    militaryPolicy: "Ejército profesional limitado; alianzas como disuasión.",
+   444→   444→    bonuses: ["+25% crecimiento de rutas comerciales", "+10% GDP por comercio"],
+   445→   445→    penalties: ["-15% efectividad de aranceles"],
+   446→   446→    synergies: ["constitutionalism", "progressivism", "anarchism"], conflicts: ["absolutism", "theocracy"],
+   447→   447→  },
+   448→   448→  marxism: {
+   449→   449→    name: "Socialismo", icon: "✊", color: "#10b981",
+   450→   450→    desc: "Clase trabajadora y propiedad colectiva",
+   451→   451→    philosophy: "La lucha de clases es el motor de la historia.",
+   452→   452→    economicModel: "Control estatal de industrias clave, redistribución.",
+   453→   453→    militaryPolicy: "Ejército popular; apoyo de las clases trabajadoras.",
+   454→   454→    bonuses: ["+30% estabilidad si clases trabajadoras fuertes", "+20% clase obrera"],
+   455→   455→    penalties: ["-10% GDP por ineficiencia estatal"],
+   456→   456→    synergies: ["syndicalism", "anarchism", "progressivism"], conflicts: ["mercantilism", "conservatism", "nationalism"],
+   457→   457→  },
+   458→   458→  nationalism: {
+   459→   459→    name: "Nacionalismo", icon: "🏛️", color: "#ef4444",
+   460→   460→    desc: "Unificación nacional y poder estatal",
+   461→   461→    philosophy: "La nación es la unidad política suprema.",
+   462→   462→    economicModel: "Desarrollo industrial orientado por el estado.",
+   463→   463→    militaryPolicy: "Ejército fuerte como prioridad absoluta.",
+   464→   464→    bonuses: ["+20% poder militar base", "+15% fuerza bélica"],
+   465→   465→    penalties: ["-10% poder diplomático"],
+   466→   466→    synergies: ["imperialism", "conservatism", "absolutism"], conflicts: ["anarchism", "marxism"],
+   467→   467→  },
+   468→   468→  conservatism: {
+   469→   469→    name: "Conservadurismo", icon: "👑", color: "#a855f7",
+   470→   470→    desc: "Tradición, orden jerárquico y estabilidad",
+   471→   471→    philosophy: "El cambio gradual preserva el orden social.",
+   472→   472→    economicModel: "Economía mixta con énfasis en lo establecido.",
+   473→   473→    militaryPolicy: "Fuerzas armadas tradicionales; defensa del orden.",
+   474→   474→    bonuses: ["+25% estabilidad base", "+20% resistencia a revoluciones"],
+   475→   475→    penalties: ["-15% velocidad de industrialización"],
+   476→   476→    synergies: ["theocracy", "constitutionalism", "mercantilism", "nationalism"], conflicts: ["anarchism", "marxism", "progressivism"],
+   477→   477→  },
+   478→   478→  absolutism: {
+   479→   479→    name: "Absolutismo", icon: "🏰", color: "#64748b",
+   480→   480→    desc: "Poder centralizado y control total",
+   481→   481→    philosophy: "El poder absoluto del gobernante es necesario.",
+   482→   482→    economicModel: "Control total del estado sobre la economía.",
+   483→   483→    militaryPolicy: "Ejército leal al soberano; poder coercitivo máximo.",
+   484→   484→    bonuses: ["+3 acciones por turno", "+20% poder diplomático"],
+   485→   485→    penalties: ["-30% estabilidad base"],
+   486→   486→    synergies: ["theocracy", "imperialism"], conflicts: ["liberalism", "anarchism", "constitutionalism", "progressivism"],
+   487→   487→  },
+   488→   488→  imperialism: {
+   489→   489→    name: "Imperialismo", icon: "🏴", color: "#dc2626",
+   490→   490→    desc: "Dominio colonial y extracción de periferias",
+   491→   491→    philosophy: "Las naciones fuertes deben expandir su civilización.",
+   492→   492→    economicModel: "Extracción masiva de recursos coloniales.",
+   493→   493→    militaryPolicy: "Proyección de fuerza global; armada y ejército coloniales.",
+   494→   494→    bonuses: ["+40% extracción colonial", "+25% volumen de rutas a periferia"],
+   495→   495→    penalties: ["-15% estabilidad por resistencia colonial"],
+   496→   496→    synergies: ["mercantilism", "nationalism", "absolutism"], conflicts: ["anarchism", "marxism", "syndicalism"],
+   497→   497→  },
+   498→   498→  constitutionalism: {
+   499→   499→    name: "Constitucionalismo", icon: "📜", color: "#8b5cf6",
+   500→   500→    desc: "Monarquía constitucional, equilibrio de poderes",
+   501→   501→    philosophy: "El poder debe estar limitado por leyes fundamentales.",
+   502→   502→    economicModel: "Mercado regulado con protecciones legales.",
+   503→   503→    militaryPolicy: "Fuerzas armadas bajo control civil parlamentario.",
+   504→   504→    bonuses: ["+20% estabilidad", "+15% crecimiento sostenido"],
+   505→   505→    penalties: ["Decisiones más lentas (mayor costo de acciones)"],
+   506→   506→    synergies: ["liberalism", "conservatism", "progressivism"], conflicts: ["absolutism"],
+   507→   507→  },
+   508→   508→  progressivism: {
+   509→   509→    name: "Progresismo", icon: "🔧", color: "#14b8a6",
+   510→   510→    desc: "Reforma social y modernización gradual",
+   511→   511→    philosophy: "El progreso se logra mediante reformas institucionales.",
+   512→   512→    economicModel: "Reformas laborales, educación pública, infraestructura.",
+   513→   513→    militaryPolicy: "Defensa limitada; inversión en bienestar social.",
+   514→   514→    bonuses: ["+25% industrialización", "+20% movilidad social"],
+   515→   515→    penalties: ["-10% poder militar"],
+   516→   516→    synergies: ["liberalism", "constitutionalism", "marxism", "syndicalism"], conflicts: ["absolutism", "theocracy", "conservatism"],
+   517→   517→  },
+   518→   518→  anarchism: {
+   519→   519→    name: "Anarquismo", icon: "🔥", color: "#f97316",
+   520→   520→    desc: "Anti-estado, acción directa y ayuda mutua",
+   521→   521→    philosophy: "Toda jerarquía coercitiva es illegítima.",
+   522→   522→    economicModel: "Cooperativas, intercambio libre, autogestión.",
+   523→   523→    militaryPolicy: "Milicias populares voluntarias; defensa horizontal.",
+   524→   524→    bonuses: ["-30% descontento base", "+20% resistencia a imposición"],
+   525→   525→    penalties: ["-20% GDP por falta de planificación central"],
+   526→   526→    synergies: ["marxism", "syndicalism", "liberalism"], conflicts: ["absolutism", "imperialism", "nationalism", "theocracy"],
+   527→   527→  },
+   528→   528→  theocracy: {
+   529→   529→    name: "Teocracia", icon: "☪️", color: "#eab308",
+   530→   530→    desc: "Gobierno religioso y mandato divino",
+   531→   531→    philosophy: "El poder viene de lo divino. La ley sagrada es suprema.",
+   532→   532→    economicModel: "Economía regulada por preceptos religiosos.",
+   533→   533→    militaryPolicy: "Guerra santa cuando sea necesario; ejército de fieles.",
+   534→   534→    bonuses: ["+30% estabilidad si estabilidad > 60", "+25% poder cultural"],
+   535→   535→    penalties: ["-20% tolerancia a ideologías ajenas"],
+   536→   536→    synergies: ["conservatism", "absolutism"], conflicts: ["liberalism", "anarchism", "progressivism"],
+   537→   537→  },
+   538→   538→  syndicalism: {
+   539→   539→    name: "Sindicalismo", icon: "⚒️", color: "#84cc16",
+   540→   540→    desc: "Sindicatos y autogestión obrera",
+   541→   541→    philosophy: "Los trabajadores deben controlar los medios de producción.",
+   542→   542→    economicModel: "Industrias manejadas por sindicatos; producción para necesidad.",
+   543→   543→    militaryPolicy: "Milicias obreras; huelga general como arma.",
+   544→   544→    bonuses: ["+35% poder de clase trabajadora", "+20% estabilidad obrera"],
+   545→   545→    penalties: ["-15% GDP por ineficiencia burocrática sindical"],
+   546→   546→    synergies: ["marxism", "anarchism", "progressivism"], conflicts: ["absolutism", "imperialism"],
+   547→   547→  },
+   548→   548→};
+   549→   549→
+   550→   550→export const FOCUS_INFO: Record<StrategicFocus, {
+   551→   551→  name: string; icon: string; color: string;
+   552→   552→  desc: string;
+   553→   553→  bonuses: { stat: string; value: string }[];
+   554→   554→  penalty: string;
+   555→   555→}> = {
+   556→   556→  industrialist: {
+   557→   557→    name: "Industrialista", icon: "🏭", color: "#f59e0b",
+   558→   558→    desc: "Prioridad: industrialización y crecimiento económico.",
+   559→   559→    bonuses: [
+   560→   560→      { stat: "Industrialización", value: "+15%" },
+   561→   561→      { stat: "Inversión en industria", value: "-20% costo" },
+   562→   562→      { stat: "Infraestructura", value: "+10% GDP extra" },
+   563→   563→    ],
+   564→   564→    penalty: "Poder militar crece 10% más lento",
+   565→   565→  },
+   566→   566→  militarist: {
+   567→   567→    name: "Militarista", icon: "⚔️", color: "#ef4444",
+   568→   568→    desc: "El poder bélico es tu camino hacia la hegemonía.",
+   569→   569→    bonuses: [
+   570→   570→      { stat: "Poder militar base", value: "+20%" },
+   571→   571→      { stat: "Construir militar", value: "-25% costo" },
+   572→   572→      { stat: "Presión diplomática", value: "+15% fuerza" },
+   573→   573→    ],
+   574→   574→    penalty: "Poder cultural crece 10% más lento",
+   575→   575→  },
+   576→   576→  diplomat: {
+   577→   577→    name: "Diplomático", icon: "🤝", color: "#06b6d4",
+   578→   578→    desc: "Las alianzas y el comercio son tu arma principal.",
+   579→   579→    bonuses: [
+   580→   580→      { stat: "Poder diplomático", value: "+20%" },
+   581→   581→      { stat: "Buscar socios", value: "-20% cooldown" },
+   582→   582→      { stat: "Rutas comerciales", value: "+15% volumen" },
+   583→   583→    ],
+   584→   584→    penalty: "Acciones militares cuestan 15% más",
+   585→   585→  },
+   586→   586→  culturalist: {
+   587→   587→    name: "Culturalista", icon: "🎭", color: "#a855f7",
+   588→   588→    desc: "Expande tu ideología y cultura por el mundo.",
+   589→   589→    bonuses: [
+   590→   590→      { stat: "Poder cultural", value: "+20%" },
+   591→   591→      { stat: "Spread ideológico", value: "+25% efectividad" },
+   592→   592→      { stat: "Resistencia ideológica", value: "+30%" },
+   593→   593→    ],
+   594→   594→    penalty: "Acciones militares cuestan 15% más",
+   595→   595→  },
+   596→   596→  balanced: {
+   597→   597→    name: "Equilibrado", icon: "⚖️", color: "#10b981",
+   598→   598→    desc: "Sin especialización. Flexibilidad total.",
+   599→   599→    bonuses: [
+   600→   600→      { stat: "Costo de acciones", value: "-10%" },
+   601→   601→      { stat: "Cooldown global", value: "-1 turno" },
+   602→   602→      { stat: "Adaptabilidad", value: "Sin debilidad" },
+   603→   603→    ],
+   604→   604→    penalty: "Sin bonuses fuertes en ninguna área",
+   605→   605→  },
+   606→   606→  colonialist: {
+   607→   607→    name: "Colonialista", icon: "🏴", color: "#dc2626",
+   608→   608→    desc: "Extraer recursos de la periferia para alimentar tu industria.",
+   609→   609→    bonuses: [
+   610→   610→      { stat: "Extracción colonial", value: "+30%" },
+   611→   611→      { stat: "Expansiones", value: "-25% costo" },
+   612→   612→      { stat: "Recursos ganados", value: "+20%" },
+   613→   613→    ],
+   614→   614→    penalty: "-10% estabilidad por tensión colonial",
+   615→   615→  },
+   616→   616→  scientist: {
+   617→   617→    name: "Científico", icon: "🔬", color: "#eab308",
+   618→   618→    desc: "La investigación y la innovación son la clave del poder.",
+   619→   619→    bonuses: [
+   620→   620→      { stat: "Industrialización", value: "+25%" },
+   621→   621→      { stat: "Velocidad tech", value: "+30%" },
+   622→   622→      { stat: "Intercambio técnico", value: "-20% cooldown" },
+   623→   623→    ],
+   624→   624→    penalty: "Acciones militares cuestan 10% más",
+   625→   625→  },
+   626→   626→  merchant: {
+   627→   627→    name: "Comerciante", icon: "💰", color: "#14b8a6",
+   628→   628→    desc: "Maximiza el comercio y las rutas comerciales.",
+   629→   629→    bonuses: [
+   630→   630→      { stat: "GDP por ruta", value: "+25%" },
+   631→   631→      { stat: "Nuevas rutas", value: "-30% cooldown" },
+   632→   632→      { stat: "Volumen comercial", value: "+15%" },
+   633→   633→    ],
+   634→   634→    penalty: "-10% poder militar",
+   635→   635→  },
+   636→   636→  revolutionary: {
+   637→   637→    name: "Revolucionario", icon: "🔥", color: "#f97316",
+   638→   638→    desc: "Destabiliza rivales y propaga tu ideología agresivamente.",
+   639→   639→    bonuses: [
+   640→   640→      { stat: "Spread ideológico", value: "+40%" },
+   641→   641→      { stat: "Desestabilizar rivales", value: "+30%" },
+   642→   642→      { stat: "Poder cultural", value: "+15%" },
+   643→   643→    ],
+   644→   644→    penalty: "-15% estabilidad, más vulnerable a revoluciones",
+   645→   645→  },
+   646→   646→  isolationist: {
+   647→   647→    name: "Aislacionista", icon: "🏔️", color: "#64748b",
+   648→   648→    desc: "Fortalece defensas y busca autosuficiencia.",
+   649→   649→    bonuses: [
+   650→   650→      { stat: "Estabilidad", value: "+20%" },
+   651→   651→      { stat: "Defensa", value: "+25% poder militar defensivo" },
+   652→   652→      { stat: "Auto-suficiencia", value: "+15% producción interna" },
+   653→   653→    ],
+   654→   654→    penalty: "-20% volumen de comercio internacional",
+   655→   655→  },
+   656→   656→};
+   657→   657→
+   658→   658→export const TRAIT_INFO: Record<CulturalTrait, {
+   659→   659→  name: string; icon: string; color: string;
+   660→   660→  desc: string; effect: string;
+   661→   661→}> = {
+   662→   662→  seafaring:     { name: "Tradición Marítima",    icon: "⚓", color: "#06b6d4", desc: "Tu pueblo domina los mares.",                    effect: "+25% volumen de rutas marítimas. Bonus al buscar socios." },
+   663→   663→  innovative:    { name: "Espíritu Innovador",    icon: "💡", color: "#f59e0b", desc: "Tu sociedad valora el progreso.",               effect: "Industrialización avanza 30% más rápido." },
+   664→   664→  warlike:       { name: "Tradición Bélica",      icon: "🗡️", color: "#ef4444", desc: "La guerra forja tu pueblo.",                    effect: "+15% poder militar base. Regenera estabilidad al ganar conflictos." },
+   665→   665→  mercantile:    { name: "Instinto Comerciante",   icon: "🪙", color: "#10b981", desc: "El comercio es tu lenguaje.",                   effect: "+20% GDP por cada ruta comercial activa." },
+   666→   666→  spiritual:     { name: "Herencia Espiritual",    icon: "🕉️", color: "#a855f7", desc: "Tradiciones espirituales unen a tu pueblo.",   effect: "+20 estabilidad base. Descontento sube 20% más lento." },
+   667→   667→  expansionist:  { name: "Fervor Expansionista",   icon: "🧭", color: "#f97316", desc: "Tu destino es expandir fronteras.",              effect: "+30% extracción colonial, -20% costo de expansión." },
+   668→   668→  agrarian:      { name: "Raíces Agrarias",       icon: "🌾", color: "#84cc16", desc: "La tierra es tu riqueza ancestral.",            effect: "+25% producción de grano, +10% crecimiento poblacional." },
+   669→   669→  industrial:    { name: "Fuerza Industrial",       icon: "⚙️", color: "#eab308", desc: "Las fábricas son el corazón de tu nación.",     effect: "+20% eficiencia manufacturera, +10% industrialización." },
+   670→   670→  scholarly:     { name: "Saber Académico",        icon: "📚", color: "#8b5cf6", desc: "El conocimiento es poder.",                     effect: "+20% poder cultural, +15% velocidad de investigación." },
+   671→   671→  nomadic:       { name: "Tradición Nómada",       icon: "🐎", color: "#f97316", desc: "La movilidad define tu pueblo.",                effect: "+15% velocidad militar, +10% flexibilidad de fronteras." },
+   672→   672→  diplomatic:    { name: "Habilidad Diplomática",   icon: "🕊️", color: "#06b6d4", desc: "Las palabras resuelven más que las armas.",      effect: "+20% poder diplomático, +15% bonus en alianzas." },
+   673→   673→  fortified:    { name: "Fortaleza Ancestral",    icon: "🏰", color: "#64748b", desc: "Tus defensas son legendarias.",                 effect: "+25% defensa, estabilidad no baja de 30 bajo asedio." },
+   674→   674→};
+   675→   675→

@@ -100,7 +100,7 @@ function evalBoostMilitary(ctx: UtilityContext): NPCAction | null {
   const { nation, globalThreat } = ctx;
   // High utility when militarily weak relative to threats
   const threat = (globalThreat - nation.militaryPower) / 100;
-  const ideologyBonus = nation.ideology === "nationalism" ? 0.2 : nation.ideology === "absolutism" ? 0.15 : 0;
+  const ideologyBonus = nation.primaryIdeology === "nationalism" ? 0.2 : nation.primaryIdeology === "absolutism" ? 0.15 : 0;
   const utility = clamp(threat * 0.6 + ideologyBonus, 0, 1);
 
   return {
@@ -151,9 +151,13 @@ function evalChangeTariff(ctx: UtilityContext): NPCAction | null {
   avgTariff = count > 0 ? avgTariff / count : 0.1;
 
   // Mercantilists want high tariffs, liberals want low
-  const idealTariff = nation.ideology === "mercantilism" ? 0.3
-    : nation.ideology === "liberalism" ? 0.05
+  // Secondary ideologies nudge the ideal tariff slightly
+  let idealTariff = nation.primaryIdeology === "mercantilism" ? 0.3
+    : nation.primaryIdeology === "liberalism" ? 0.05
     : 0.15;
+  if (nation.secondaryIdeologies.includes("liberalism")) idealTariff *= 0.85;
+  if (nation.secondaryIdeologies.includes("mercantilism")) idealTariff *= 1.15;
+  idealTariff = Math.min(0.5, Math.max(0, idealTariff));
   const gap = Math.abs(avgTariff - idealTariff);
 
   if (gap < 0.05) return null; // Already close to ideal
@@ -215,7 +219,7 @@ function evalSpreadIdeology(ctx: UtilityContext): NPCAction | null {
   for (const e of edges) {
     const neighborId = e.from === nation.id ? e.to : e.from;
     const neighbor = ctx.nations.find((n) => n.id === neighborId);
-    if (neighbor && neighbor.ideology !== nation.ideology) differentNeighbors++;
+    if (neighbor && neighbor.primaryIdeology !== nation.primaryIdeology) differentNeighbors++;
   }
 
   if (differentNeighbors === 0) return null;
@@ -271,9 +275,12 @@ function executeAction(
       break;
 
     case "change_tariff": {
-      const idealTariff = nation.ideology === "mercantilism" ? 0.3
-        : nation.ideology === "liberalism" ? 0.05
+      let idealTariff = nation.primaryIdeology === "mercantilism" ? 0.3
+        : nation.primaryIdeology === "liberalism" ? 0.05
         : 0.15;
+      if (nation.secondaryIdeologies.includes("liberalism")) idealTariff *= 0.85;
+      if (nation.secondaryIdeologies.includes("mercantilism")) idealTariff *= 1.15;
+      idealTariff = Math.min(0.5, Math.max(0, idealTariff));
       for (const e of edges) {
         if (e.from === nation.id || e.to === nation.id) {
           e.tariffRate += (idealTariff - e.tariffRate) * 0.3;

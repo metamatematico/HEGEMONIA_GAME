@@ -151,18 +151,24 @@ export function isOnCooldown(type: PlayerActionType, cooldowns: CooldownMap, cur
   return available !== undefined && available > currentTurn;
 }
 
-/** Check if player can afford an action */
+/** Check if player can afford an action (considers primary + secondary ideologies for discount) */
 export function canAfford(type: PlayerActionType, playerNation: NationNode): boolean {
   const meta = ACTION_META[type];
-  // Apply ideology discount (20% cost reduction for matching ideology)
-  const discount = meta.ideologyBonus?.includes(playerNation.ideology) ? 0.8 : 1.0;
+  // Apply ideology discount (20% cost reduction for matching primary or any secondary ideology)
+  const hasIdeologyBonus = meta.ideologyBonus?.some(
+    (i) => i === playerNation.primaryIdeology || playerNation.secondaryIdeologies.includes(i)
+  ) ?? false;
+  const discount = hasIdeologyBonus ? 0.8 : 1.0;
   return playerNation.gdp >= meta.cost * discount;
 }
 
-/** Get effective cost (with ideology discount) */
+/** Get effective cost (with ideology discount for primary + secondary ideologies) */
 export function getEffectiveCost(type: PlayerActionType, playerNation: NationNode): number {
   const meta = ACTION_META[type];
-  const discount = meta.ideologyBonus?.includes(playerNation.ideology) ? 0.8 : 1.0;
+  const hasIdeologyBonus = meta.ideologyBonus?.some(
+    (i) => i === playerNation.primaryIdeology || playerNation.secondaryIdeologies.includes(i)
+  ) ?? false;
+  const discount = hasIdeologyBonus ? 0.8 : 1.0;
   return Math.round(meta.cost * discount * 1000) / 1000;
 }
 
