@@ -1,4 +1,5 @@
-"use client";
+// This script generates the full page.tsx for Hegemonia
+const pageContent = `"use client";
 
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -67,7 +68,7 @@ function CollapsiblePanel({ title, icon: Icon, children, className, panelId, isO
   panelId: string; isOpen: boolean; onToggle: (id: string) => void;
 }) {
   return (
-    <div className={`bg-[#111827] border border-slate-800/50 rounded-lg overflow-hidden flex flex-col ${className ?? ""}${isOpen ? "" : " h-9"}`}>
+    <div className={\`bg-[#111827] border border-slate-800/50 rounded-lg overflow-hidden flex flex-col \${className ?? ""}\${isOpen ? "" : " h-9"}\`}>
       <div className="px-4 py-2.5 border-b border-slate-800/50 flex items-center gap-2 shrink-0 cursor-pointer select-none hover:bg-slate-800/20 transition-colors"
         onClick={() => onToggle(panelId)}>
         <Icon className="w-3.5 h-3.5 text-cyan-400" />
@@ -113,7 +114,7 @@ function GraphView() {
     const nvw = Math.max(20, Math.min(150, vw * f));
     const nvh = nvw * (vh / vw);
     const r = nvw / vw;
-    setViewBox(`${(mx - (mx - vx) * r).toFixed(1)} ${(my - (my - vy) * r).toFixed(1)} ${nvw.toFixed(1)} ${nvh.toFixed(1)}`);
+    setViewBox(\`\${(mx - (mx - vx) * r).toFixed(1)} \${(my - (my - vy) * r).toFixed(1)} \${nvw.toFixed(1)} \${nvh.toFixed(1)}\`);
   }, [viewBox]);
 
   // Pan
@@ -133,7 +134,7 @@ function GraphView() {
     const [vw, , , vh] = viewBox.split(" ").map(Number);
     const sx = vw / rect.width;
     const sy = sx;
-    setViewBox(`${(vbStart.current.x - (e.clientX - dragStart.current.x) * sx).toFixed(1)} ${(vbStart.current.y - (e.clientY - dragStart.current.y) * sy).toFixed(1)} ${vw} ${vh}`);
+    setViewBox(\`\${(vbStart.current.x - (e.clientX - dragStart.current.x) * sx).toFixed(1)} \${(vbStart.current.y - (e.clientY - dragStart.current.y) * sy).toFixed(1)} \${vw} \${vh}\`);
   }, [isDragging, viewBox]);
 
   // Reset view
@@ -172,12 +173,12 @@ function GraphView() {
           title="Resetear vista">
           <Maximize2 className="w-3 h-3 text-slate-400" />
         </button>
-        <button onClick={() => setViewBox(vb => { const [x,y,w,h] = vb.split(" ").map(Number); return `${x.toFixed(1)} ${y.toFixed(1)} ${(w*0.7).toFixed(1)} ${(h*0.7).toFixed(1)}`; })}
+        <button onClick={() => setViewBox(vb => { const [x,y,w,h] = vb.split(" ").map(Number); return \`\${x.toFixed(1)} \${y.toFixed(1)} \${(w*0.7).toFixed(1)} \${(h*0.7).toFixed(1)}\`; })}
           className="w-7 h-7 rounded bg-black/40 backdrop-blur-sm border border-slate-800/30 flex items-center justify-center hover:bg-slate-800/50 transition-colors text-[11px] text-slate-400 font-bold"
           title="Zoom +">
           +
         </button>
-        <button onClick={() => setViewBox(vb => { const [x,y,w,h] = vb.split(" ").map(Number); return `${(x-w*0.15).toFixed(1)} ${(y-h*0.15).toFixed(1)} ${(w*1.3).toFixed(1)} ${(h*1.3).toFixed(1)}`; })}
+        <button onClick={() => setViewBox(vb => { const [x,y,w,h] = vb.split(" ").map(Number); return \`\${(x-w*0.15).toFixed(1)} \${(y-h*0.15).toFixed(1)} \${(w*1.3).toFixed(1)} \${(h*1.3).toFixed(1)}\`; })}
           className="w-7 h-7 rounded bg-black/40 backdrop-blur-sm border border-slate-800/30 flex items-center justify-center hover:bg-slate-800/50 transition-colors text-[11px] text-slate-400 font-bold"
           title="Zoom -">
           −
@@ -222,7 +223,7 @@ function GraphView() {
           const dimmed = highlightNode && !isSel && !isConn && n.id !== highlightNode;
           const color = classColor(n.worldClass);
           return (
-            <g key={n.id} className="gn" transform={`translate(${n.x},${n.y})`} opacity={dimmed ? 0.15 : 1}
+            <g key={n.id} className="gn" transform={\`translate(\${n.x},\${n.y})\`} opacity={dimmed ? 0.15 : 1}
               style={{ cursor: "pointer" }}
               onClick={(ev) => {
                 ev.stopPropagation();
@@ -233,7 +234,7 @@ function GraphView() {
                 }
               }}
               onMouseEnter={() => setHoveredNode(n.id)} onMouseLeave={() => setHoveredNode(null)}>
-              {isSel && <circle r={r + 4} fill="none" stroke={color} strokeWidth="1.5" opacity="0.4"><animate attributeName="r" values={`${r + 3};${r + 6};${r + 3}`} dur="2s" repeatCount="indefinite" /><animate attributeName="opacity" values="0.4;0.15;0.4" dur="2s" repeatCount="indefinite" /></circle>}
+              {isSel && <circle r={r + 4} fill="none" stroke={color} strokeWidth="1.5" opacity="0.4"><animate attributeName="r" values={\`\${r + 3};\${r + 6};\${r + 3}\`} dur="2s" repeatCount="indefinite" /><animate attributeName="opacity" values="0.4;0.15;0.4" dur="2s" repeatCount="indefinite" /></circle>}
               {n.id === actionTargetId && (
                 <circle r={r + 3} fill="none" stroke="#ef4444" strokeWidth="1.2" strokeDasharray="3 2" opacity="0.8">
                   <animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="6s" repeatCount="indefinite" />
@@ -246,7 +247,7 @@ function GraphView() {
                 {n.flag} {n.name.length > 12 ? n.name.slice(0, 10) + "…" : n.name}
               </text>
               {isHov && !isSel && (
-                <g transform={`translate(0,${-r - 6})`}>
+                <g transform={\`translate(0,\${-r - 6})\`}>
                   <rect x={-30} y={-14} width={60} height={14} rx={3} fill="rgba(15,23,42,0.9)" stroke={color} strokeWidth={0.5} />
                   <text textAnchor="middle" y={-4} fill="#e2e8f0" fontSize="2.2" fontFamily="monospace" fontWeight={600}>GDP: {n.gdp.toFixed(1)}B</text>
                 </g>
@@ -270,7 +271,7 @@ function GDPChart({ nations }: { nations: NationNode[] }) {
         <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" horizontal={false} />
         <XAxis type="number" tick={{ fontSize: 10, fill: "#64748b" }} axisLine={{ stroke: "#334155" }} />
         <YAxis type="category" dataKey="name" width={110} tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} />
-        <Tooltip contentStyle={{ background: "#1e293b", border: "1px solid #334155", borderRadius: 8, fontSize: 11 }} labelStyle={{ color: "#e2e8f0" }} formatter={(v: number) => [`${v.toFixed(1)}B`, "GDP"]} />
+        <Tooltip contentStyle={{ background: "#1e293b", border: "1px solid #334155", borderRadius: 8, fontSize: 11 }} labelStyle={{ color: "#e2e8f0" }} formatter={(v: number) => [\`\${v.toFixed(1)}B\`, "GDP"]} />
         <Bar dataKey="gdp" radius={[0, 4, 4, 0]}>
           {data.map((d, i) => <Cell key={i} fill={d.fill} />)}
         </Bar>
@@ -285,7 +286,7 @@ function TemporalChart() {
   const tracked = ["gb", "fr", "de", "us", "ru", "cn"];
   const colors: Record<string, string> = { gb: "#06b6d4", fr: "#3b82f6", de: "#f59e0b", us: "#10b981", ru: "#ef4444", cn: "#a855f7" };
   const names: Record<string, string> = { gb: "GB", fr: "FR", de: "DE", us: "US", ru: "RU", cn: "CN" };
-  const data = hist.map((h) => ({ ...h, label: `${h.year}` }));
+  const data = hist.map((h) => ({ ...h, label: \`\${h.year}\` }));
   if (data.length < 2) {
     return <div className="flex items-center justify-center h-full text-slate-600 text-xs">Avanza 2+ turnos para ver la gráfica</div>;
   }
@@ -348,7 +349,7 @@ function RankingsPanel() {
     <div className="divide-y divide-slate-800/50 max-h-[260px] overflow-y-auto heg-scroll">
       {rankings.map((n, i) => (
         <button key={n.id} onClick={() => setSelected(n.id)} className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-800/30 transition-colors text-left">
-          <span className={`text-[10px] font-mono w-5 text-center font-bold ${i < 3 ? "text-cyan-400" : "text-slate-600"}`}>{i + 1}</span>
+          <span className={\`text-[10px] font-mono w-5 text-center font-bold \${i < 3 ? "text-cyan-400" : "text-slate-600"}\`}>{i + 1}</span>
           <span className="text-sm">{n.flag}</span>
           <span className="text-xs text-slate-300 flex-1 truncate">{n.name}</span>
           <span className="text-[10px] px-1.5 py-0.5 rounded font-mono font-medium" style={{ background: classBgColor(n.worldClass), color: classColor(n.worldClass) }}>{classLabel(n.worldClass).slice(0, 4)}</span>
@@ -411,16 +412,16 @@ function NodeDetail() {
 
       <div className="grid grid-cols-2 gap-2">
         {[
-          { l: "GDP", v: `$${nation.gdp.toFixed(2)}B`, c: "text-white" },
-          { l: "Población", v: `${nation.population}M`, c: "text-white" },
-          { l: "Balanza", v: `${nation.tradeBalance >= 0 ? "+" : ""}${nation.tradeBalance}M`, c: nation.tradeBalance >= 0 ? "text-emerald-400" : "text-red-400" },
+          { l: "GDP", v: \`$\${nation.gdp.toFixed(2)}B\`, c: "text-white" },
+          { l: "Población", v: \`\${nation.population}M\`, c: "text-white" },
+          { l: "Balanza", v: \`\${nation.tradeBalance >= 0 ? "+" : ""}\${nation.tradeBalance}M\`, c: nation.tradeBalance >= 0 ? "text-emerald-400" : "text-red-400" },
           { l: "Centralidad", v: nation.eigenvectorCentrality.toFixed(3), c: "text-cyan-400" },
-          { l: "Estabilidad", v: `${nation.stability.toFixed(0)}%`, c: nation.stability > 50 ? "text-emerald-400" : "text-red-400" },
-          { l: "Industria", v: `${nation.industrialization.toFixed(0)}%`, c: "text-amber-400" },
+          { l: "Estabilidad", v: \`\${nation.stability.toFixed(0)}%\`, c: nation.stability > 50 ? "text-emerald-400" : "text-red-400" },
+          { l: "Industria", v: \`\${nation.industrialization.toFixed(0)}%\`, c: "text-amber-400" },
         ].map((s, i) => (
           <div key={i} className="bg-slate-900/50 rounded p-2">
             <div className="text-[9px] uppercase text-slate-600 font-mono">{s.l}</div>
-            <div className={`text-sm font-bold font-mono ${s.c}`}>{s.v}</div>
+            <div className={\`text-sm font-bold font-mono \${s.c}\`}>{s.v}</div>
           </div>
         ))}
       </div>
@@ -433,7 +434,7 @@ function NodeDetail() {
             { pct: nation.socialClasses.middle / socialTotal, color: "#06b6d4" },
             { pct: nation.socialClasses.working / socialTotal, color: "#f59e0b" },
             { pct: nation.socialClasses.peasant / socialTotal, color: "#64748b" },
-          ].map((seg, i) => <div key={i} className="h-full" style={{ width: `${seg.pct * 100}%`, background: seg.color }} />)}
+          ].map((seg, i) => <div key={i} className="h-full" style={{ width: \`\${seg.pct * 100}%\`, background: seg.color }} />)}
         </div>
         <div className="flex justify-between mt-1">
           {[
@@ -456,7 +457,7 @@ function NodeDetail() {
               <div key={i} className="flex items-center gap-2 text-[11px]">
                 <span className="text-xs">{partner?.flag ?? "🏳️"}</span>
                 <span className="text-slate-400 flex-1 truncate">{partner?.name ?? tp.partnerId}</span>
-                <span className={`font-mono ${tp.direction === "out" ? "text-red-400" : "text-emerald-400"}`}>{tp.direction === "out" ? "→" : "←"} {tp.volume.toFixed(0)}</span>
+                <span className={\`font-mono \${tp.direction === "out" ? "text-red-400" : "text-emerald-400"}\`}>{tp.direction === "out" ? "→" : "←"} {tp.volume.toFixed(0)}</span>
               </div>
             );
           })}
@@ -475,7 +476,7 @@ function NodeDetail() {
             <div key={i} className="flex items-center gap-2">
               <span className="text-[10px] text-slate-500 w-12">{r.name}</span>
               <div className="flex-1 h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                <div className="h-full rounded-full" style={{ width: `${r.val}%`, background: r.color }} />
+                <div className="h-full rounded-full" style={{ width: \`\${r.val}%\`, background: r.color }} />
               </div>
               <span className="text-[10px] font-mono text-slate-400 w-6 text-right">{r.val.toFixed(0)}</span>
             </div>
@@ -521,13 +522,13 @@ function PlayerActionsPanel() {
         <div className="flex-1 min-w-0">
           <div className="text-xs text-white font-semibold">{player.name}</div>
           <div className="text-[10px] text-slate-500 font-mono">
-            PIB: ${player.gdp.toFixed(2)}B · Estab: {player.stability.toFixed(0)}% · Descont: {player.unrest.toFixed(0)}%
+            PIB: \${player.gdp.toFixed(2)}B · Estab: {player.stability.toFixed(0)}% · Descont: {player.unrest.toFixed(0)}%
           </div>
         </div>
         <div className="flex flex-col items-end">
           <div className="flex gap-0.5">
             {Array.from({ length: gameState.maxActionsPerTurn }).map((_, i) => (
-              <div key={i} className={`w-3 h-3 rounded-sm ${i < actionsLeft ? "bg-cyan-400" : "bg-slate-700"}`} />
+              <div key={i} className={\`w-3 h-3 rounded-sm \${i < actionsLeft ? "bg-cyan-400" : "bg-slate-700"}\`} />
             ))}
           </div>
           <span className="text-[9px] text-slate-500 font-mono mt-0.5">
@@ -537,10 +538,10 @@ function PlayerActionsPanel() {
       </div>
 
       {lastResult && (
-        <div className={`px-3 py-1.5 text-[10px] font-mono border-b shrink-0 ${
+        <div className={\`px-3 py-1.5 text-[10px] font-mono border-b shrink-0 \${
           lastResult.success ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" : "bg-red-500/10 text-red-400 border-red-500/20"
-        }`}>
-          {lastResult.success ? "✓ Acción encolada" : `✗ ${lastResult.reason ?? "Error"}`}
+        }\`}>
+          {lastResult.success ? "✓ Acción encolada" : \`✗ \${lastResult.reason ?? "Error"}\`}
         </div>
       )}
 
@@ -573,9 +574,9 @@ function PlayerActionsPanel() {
                   const hasIdeologyBonus = meta.ideologyBonus?.includes(player.primaryIdeology);
                   return (
                     <button key={action.type} onClick={() => handleAction(action.type, meta.requiresTarget)} disabled={disabled}
-                      className={`text-left p-2 rounded border transition-all relative ${
+                      className={\`text-left p-2 rounded border transition-all relative \${
                         disabled ? "bg-slate-900/30 border-slate-800/30 opacity-50 cursor-not-allowed" : "bg-slate-800/40 border-slate-700/50 hover:bg-cyan-400/10 hover:border-cyan-400/30 cursor-pointer"
-                      }`}>
+                      }\`}>
                       <div className="flex items-center gap-1.5 mb-0.5">
                         <span className="text-sm">{action.icon}</span>
                         <span className="text-[11px] font-semibold text-slate-200 truncate">{action.label}</span>
@@ -583,7 +584,7 @@ function PlayerActionsPanel() {
                       </div>
                       <p className="text-[9px] text-slate-500 leading-tight line-clamp-2 mb-1">{action.description}</p>
                       <div className="flex items-center justify-between text-[9px] font-mono">
-                        <span className={affordable ? "text-amber-400" : "text-red-400"}>${cost}B</span>
+                        <span className={affordable ? "text-amber-400" : "text-red-400"}>\${cost}B</span>
                         {onCd && <span className="text-slate-500">⏱ {(cooldowns[action.type] ?? 0) - gameState.turn}T</span>}
                       </div>
                     </button>
@@ -752,7 +753,7 @@ export default function Home() {
             </div>
           )}
           <button onClick={() => setIsStepMode(!isStepMode)}
-            className={`w-7 h-7 rounded flex items-center justify-center transition-colors ${isStepMode ? "bg-cyan-400/20 border border-cyan-400/40" : "bg-slate-800/50 border border-slate-700/50"}`}
+            className={\`w-7 h-7 rounded flex items-center justify-center transition-colors \${isStepMode ? "bg-cyan-400/20 border border-cyan-400/40" : "bg-slate-800/50 border border-slate-700/50"}\`}
             title={isStepMode ? "Paso a paso activado" : "Paso a paso desactivado"}>
             <ChevronRight className="w-3 h-3 text-cyan-400" />
           </button>
@@ -768,21 +769,21 @@ export default function Home() {
           <button onClick={togglePause} className="w-7 h-7 rounded bg-cyan-400/10 border border-cyan-400/20 flex items-center justify-center hover:bg-cyan-400/20 transition-colors">
             {isPaused ? <Play className="w-3 h-3 text-cyan-400 ml-0.5" /> : <Pause className="w-3 h-3 text-cyan-400" />}
           </button>
-          <button onClick={() => setSpeed(3000)} className={`text-[9px] px-1.5 py-0.5 rounded ${speed === 3000 ? "bg-cyan-400/20 text-cyan-400" : "text-slate-500 hover:text-slate-300"}`}>0.5x</button>
-          <button onClick={() => setSpeed(2000)} className={`text-[9px] px-1.5 py-0.5 rounded ${speed === 2000 ? "bg-cyan-400/20 text-cyan-400" : "text-slate-500 hover:text-slate-300"}`}>1x</button>
-          <button onClick={() => setSpeed(1000)} className={`text-[9px] px-1.5 py-0.5 rounded ${speed === 1000 ? "bg-cyan-400/20 text-cyan-400" : "text-slate-500 hover:text-slate-300"}`}>2x</button>
-          <button onClick={() => setSpeed(400)} className={`text-[9px] px-1.5 py-0.5 rounded ${speed === 400 ? "bg-cyan-400/20 text-cyan-400" : "text-slate-500 hover:text-slate-300"}`}>5x</button>
+          <button onClick={() => setSpeed(3000)} className={\`text-[9px] px-1.5 py-0.5 rounded \${speed === 3000 ? "bg-cyan-400/20 text-cyan-400" : "text-slate-500 hover:text-slate-300"}\`}>0.5x</button>
+          <button onClick={() => setSpeed(2000)} className={\`text-[9px] px-1.5 py-0.5 rounded \${speed === 2000 ? "bg-cyan-400/20 text-cyan-400" : "text-slate-500 hover:text-slate-300"}\`}>1x</button>
+          <button onClick={() => setSpeed(1000)} className={\`text-[9px] px-1.5 py-0.5 rounded \${speed === 1000 ? "bg-cyan-400/20 text-cyan-400" : "text-slate-500 hover:text-slate-300"}\`}>2x</button>
+          <button onClick={() => setSpeed(400)} className={\`text-[9px] px-1.5 py-0.5 rounded \${speed === 400 ? "bg-cyan-400/20 text-cyan-400" : "text-slate-500 hover:text-slate-300"}\`}>5x</button>
         </div>
       </header>
 
       {/* Phase progress bar */}
       <div className="h-6 bg-[#0d1117] border-b border-slate-800/50 flex items-center px-4 gap-1 overflow-x-auto">
         {phases.map((p, i) => (
-          <div key={p} className={`text-[9px] px-2 py-0.5 rounded whitespace-nowrap ${
+          <div key={p} className={\`text-[9px] px-2 py-0.5 rounded whitespace-nowrap \${
             isStepMode && i < currentPhaseIndex ? "bg-cyan-400/20 text-cyan-400" :
             isStepMode && i === currentPhaseIndex ? "bg-amber-400/20 text-amber-400 animate-pulse" :
             "text-slate-600"
-          }`}>
+          }\`}>
             {PHASE_LABELS[p]}
           </div>
         ))}
@@ -802,12 +803,12 @@ export default function Home() {
             {PANEL_DEFS.map((p) => (
               <button key={p.id}
                 onClick={() => togglePanel(p.id)}
-                className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] font-mono whitespace-nowrap transition-colors ${
+                className={\`flex items-center gap-1 px-2 py-1 rounded text-[10px] font-mono whitespace-nowrap transition-colors \${
                   openPanels.has(p.id)
                     ? "bg-cyan-400/15 text-cyan-400 border border-cyan-400/30"
                     : "text-slate-600 hover:text-slate-400 border border-transparent"
-                }`}
-                title={openPanels.has(p.id) ? `Cerrar ${p.label}` : `Abrir ${p.label}`}>
+                }\`}
+                title={openPanels.has(p.id) ? \`Cerrar \${p.label}\` : \`Abrir \${p.label}\`}>
                 <p.icon className="w-3 h-3" />
                 {p.label}
               </button>
@@ -820,10 +821,10 @@ export default function Home() {
 
           {/* Stat cards (always visible) */}
           <div className="grid grid-cols-4 gap-1.5 px-1.5 py-1.5 shrink-0">
-            <StatCard icon={TrendingUp} label="GDP Global" value={`${totalGDP}B`} color="#06b6d4" />
-            <StatCard icon={Activity} label="Comercio" value={`${totalTrade}B`} color="#10b981" />
-            <StatCard icon={Users} label="Población" value={`${totalPop}M`} color="#a855f7" />
-            <StatCard icon={Crown} label="Naciones" value={`${nations.length}`} sub={`${classCounts.core}C · ${classCounts.semi}S · ${classCounts.periphery}P`} color="#f59e0b" />
+            <StatCard icon={TrendingUp} label="GDP Global" value={\`\${totalGDP}B\`} color="#06b6d4" />
+            <StatCard icon={Activity} label="Comercio" value={\`\${totalTrade}B\`} color="#10b981" />
+            <StatCard icon={Users} label="Población" value={\`\${totalPop}M\`} color="#a855f7" />
+            <StatCard icon={Crown} label="Naciones" value={\`\${nations.length}\`} sub={\`\${classCounts.core}C · \${classCounts.semi}S · \${classCounts.periphery}P\`} color="#f59e0b" />
           </div>
 
           {/* Collapsible panels area — scrollable */}
@@ -839,8 +840,8 @@ export default function Home() {
             {/* Detail / Rankings panel */}
             <CollapsiblePanel title="Detalle y Rankings" icon={ScrollText} panelId="detail" isOpen={openPanels.has("detail")} onToggle={togglePanel} className="">
               <div className="flex border-b border-slate-800/50">
-                <button onClick={() => setActiveTab("detail")} className={`flex-1 px-3 py-2 text-[10px] uppercase tracking-wider font-mono transition-colors ${activeTab === "detail" ? "text-cyan-400 border-b-2 border-cyan-400 bg-cyan-400/5" : "text-slate-500 hover:text-slate-300"}`}>🔍 Detalle</button>
-                <button onClick={() => setActiveTab("rankings")} className={`flex-1 px-3 py-2 text-[10px] uppercase tracking-wider font-mono transition-colors ${activeTab === "rankings" ? "text-cyan-400 border-b-2 border-cyan-400 bg-cyan-400/5" : "text-slate-500 hover:text-slate-300"}`}>🏆 Rankings</button>
+                <button onClick={() => setActiveTab("detail")} className={\`flex-1 px-3 py-2 text-[10px] uppercase tracking-wider font-mono transition-colors \${activeTab === "detail" ? "text-cyan-400 border-b-2 border-cyan-400 bg-cyan-400/5" : "text-slate-500 hover:text-slate-300"}\`}>🔍 Detalle</button>
+                <button onClick={() => setActiveTab("rankings")} className={\`flex-1 px-3 py-2 text-[10px] uppercase tracking-wider font-mono transition-colors \${activeTab === "rankings" ? "text-cyan-400 border-b-2 border-cyan-400 bg-cyan-400/5" : "text-slate-500 hover:text-slate-300"}\`}>🏆 Rankings</button>
               </div>
               <div className="max-h-[400px] overflow-hidden">
                 {activeTab === "detail" ? <NodeDetail /> : <RankingsPanel />}
@@ -863,7 +864,7 @@ export default function Home() {
             </CollapsiblePanel>
 
             {/* Player actions panel */}
-            <CollapsiblePanel title={`Acciones del Jugador (${actionsLeft} restantes)`} icon={Gamepad2} panelId="actions" isOpen={openPanels.has("actions")} onToggle={togglePanel} className="flex-1">
+            <CollapsiblePanel title={\`Acciones del Jugador (\${actionsLeft} restantes)\`} icon={Gamepad2} panelId="actions" isOpen={openPanels.has("actions")} onToggle={togglePanel} className="flex-1">
               <PlayerActionsPanel />
             </CollapsiblePanel>
           </div>
@@ -872,3 +873,7 @@ export default function Home() {
     </div>
   );
 }
+`;
+
+require("fs").writeFileSync("/home/z/my-project/src/app/page.tsx", pageContent);
+console.log("page.tsx written successfully");
