@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef, useTransition } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, RadarChart, Radar, PolarGrid,
@@ -94,6 +94,30 @@ const LAYOUT_DEFS: { id: GraphLayout; label: string; icon: React.ElementType; de
   { id: "gdp", label: "GDP", icon: TrendingUp, desc: "Ordenado por Producto Interno Bruto" },
 ];
 
+// ─── Error Boundary ───
+class GraphErrorBoundary extends React.Component<React.PropsWithChildren<{ fallback?: React.ReactNode }>, { hasError: boolean; error?: Error }> {
+  constructor(props: React.PropsWithChildren<{ fallback?: React.ReactNode }>) {
+    super(props);
+    this.state = { hasError: false, error: undefined };
+  }
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+  render() {
+    if (this.state.hasError) {
+      return this.props.fallback ?? (
+        <div className="flex items-center justify-center h-full bg-red-950/30 text-red-400 text-xs p-4 text-center">
+          <div>
+            <p className="font-bold mb-1">Error en el grafo</p>
+            <p className="text-red-300 text-[10px] font-mono">{this.state.error?.message}</p>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 // ─── GRAPH VIEW with full interactivity ───
 function GraphView() {
   const svgRef = useRef<SVGSVGElement>(null);
@@ -102,6 +126,8 @@ function GraphView() {
   const [isDragging, setIsDragging] = useState(false);
   const [layoutMode, setLayoutMode] = useState<GraphLayout>("original");
   const [showLayoutMenu, setShowLayoutMenu] = useState(false);
+  const [layoutError, setLayoutError] = useState<string | null>(null);
+  const [, startLayoutTransition] = useTransition();
   const dragStart = useRef({ x: 0, y: 0 });
   const vbStart = useRef({ x: -5, y: -5 });
 
@@ -121,84 +147,109 @@ function GraphView() {
 
     const pos = new Map<string, { x: number; y: number }>();
 
-    if (layoutMode === "hierarchy") {
-      // Arrange by worldClass in rows: core on top, semi in middle, periphery on bottom
-      const byClass: Record<string, NationNode[]> = { core: [], semi: [], periphery: [] };
-      for (const n of nations) byClass[n.worldClass]?.push(n);
-      const rows: { nodes: NationNode[]; y: number }[] = [
-        { nodes: byClass.core || [], y: 15 },
-        { nodes: byClass.semi || [], y: 45 },
-        { nodes: byClass.periphery || [], y: 72 },
-      ];
-      for (const row of rows) {
-        const spacing = 90 / Math.max(1, row.nodes.length + 1);
-        row.nodes.forEach((n, i) => {
-          pos.set(n.id, { x: 5 + spacing * (i + 1), y: row.y });
+    try {
+      if (layoutMode === "hierarchy") {
+        // Arrange by worldClass in rows: core on top, semi in middle, periphery on bottom
+        const byClass: Record<string, NationNode[]> = { core: [], semi: [], periphery: [] };
+        for (const n of nations) {
+          const cls = n.worldClass || "periphery";
+          if (!byClass[cls]) byClass[cls] = [];
+          byClass[cls].push(n);
+        }
+        const rows: { nodes: NationNode[]; y: number }[] = [
+          { nodes: byClass.core || [], y: 15 },
+          { nodes: byClass.semi || [], y: 45 },
+          { nodes: byClass.periphery || [], y: 72 },
+        ];
+        for (const row of rows) {
+          const spacing = 90 / Math.max(1, row.nodes.length + 1);
+          row.nodes.forEach((n, i) => {
+            pos.set(n.id, { x: 5 + spacing * (i + 1), y: row.y });
+          });
+        }
+      } else if (layoutMode === "eigenvector" || layoutMode === "betweenness" || layoutMode === "pagerank") {
+        const scores = layoutMode === "eigenvector"
+          ? eigenvectorCentrality(nations, edges)
+          : layoutMode === "betweenness"
+            ? betweennessCentrality(nations, edges)
+            : pageRank(nations, edges);
+
+        // Sort by score descending, arrange in grid
+        const sorted = [...nations].sort((a, b) => (scores.get(b.id) ?? 0) - (scores.get(a.id) ?? 0));
+        const cols = Math.max(1, Math.ceil(Math.sqrt(sorted.length)));
+        const totalRows = Math.ceil(sorted.length / cols);
+        const colSpacing = cols > 1 ? 80 / (cols - 1) : 0;
+        const rowSpacing = totalRows > 1 ? 70 / (totalRows - 1) : 0;
+        sorted.forEach((n, i) => {
+          const col = i % cols;
+          const row = Math.floor(i / cols);
+          pos.set(n.id, {
+            x: 5 + colSpacing * col,
+            y: 5 + rowSpacing * row,
+          });
+        });
+      } else if (layoutMode === "gdp") {
+        const sorted = [...nations].sort((a, b) => b.gdp - a.gdp);
+        const cols = Math.max(1, Math.ceil(Math.sqrt(sorted.length)));
+        const totalRows = Math.ceil(sorted.length / cols);
+        const colSpacing = cols > 1 ? 80 / (cols - 1) : 0;
+        const rowSpacing = totalRows > 1 ? 70 / (totalRows - 1) : 0;
+        sorted.forEach((n, i) => {
+          const col = i % cols;
+          const row = Math.floor(i / cols);
+          pos.set(n.id, {
+            x: 5 + colSpacing * col,
+            y: 5 + rowSpacing * row,
+          });
         });
       }
-    } else if (layoutMode === "eigenvector" || layoutMode === "betweenness" || layoutMode === "pagerank") {
-      const scores = layoutMode === "eigenvector"
-        ? eigenvectorCentrality(nations, edges)
-        : layoutMode === "betweenness"
-          ? betweennessCentrality(nations, edges)
-          : pageRank(nations, edges);
-
-      // Sort by score descending, arrange in grid
-      const sorted = [...nations].sort((a, b) => (scores.get(b.id) ?? 0) - (scores.get(a.id) ?? 0));
-      const cols = Math.ceil(Math.sqrt(sorted.length));
-      const totalRows = Math.ceil(sorted.length / cols);
-      const colSpacing = cols > 1 ? 80 / (cols - 1) : 0;
-      const rowSpacing = totalRows > 1 ? 70 / (totalRows - 1) : 0;
-      sorted.forEach((n, i) => {
-        const col = i % cols;
-        const row = Math.floor(i / cols);
-        pos.set(n.id, {
-          x: 5 + colSpacing * col,
-          y: 5 + rowSpacing * row,
-        });
-      });
-    } else if (layoutMode === "gdp") {
-      const sorted = [...nations].sort((a, b) => b.gdp - a.gdp);
-      const cols = Math.ceil(Math.sqrt(sorted.length));
-      const totalRows = Math.ceil(sorted.length / cols);
-      const colSpacing = cols > 1 ? 80 / (cols - 1) : 0;
-      const rowSpacing = totalRows > 1 ? 70 / (totalRows - 1) : 0;
-      sorted.forEach((n, i) => {
-        const col = i % cols;
-        const row = Math.floor(i / cols);
-        pos.set(n.id, {
-          x: 5 + colSpacing * col,
-          y: 5 + rowSpacing * row,
-        });
-      });
+    } catch (err) {
+      console.error("[Hegemonia] Layout calculation error:", err);
+      return null;
     }
 
     return pos;
   }, [layoutMode, nations, edges]);
 
+  // Detect layout errors for UI feedback
+  useEffect(() => {
+    if (layoutMode !== "original" && !layoutPositions) {
+      setLayoutError(`No se pudo calcular el layout "${layoutMode}"`);
+    } else {
+      setLayoutError(null);
+    }
+  }, [layoutMode, layoutPositions]);
+
   // Helper: get position for a nation (layout override or original)
   const getNodePos = useCallback((n: NationNode) => {
     if (layoutPositions) {
       const p = layoutPositions.get(n.id);
-      if (p) return p;
+      if (p && isFinite(p.x) && isFinite(p.y)) return p;
     }
-    return { x: n.x, y: n.y };
+    const ox = typeof n.x === "number" && isFinite(n.x) ? n.x : 50;
+    const oy = typeof n.y === "number" && isFinite(n.y) ? n.y : 50;
+    return { x: ox, y: oy };
   }, [layoutPositions]);
 
-  // Zoom centered on cursor
-  const handleWheel = useCallback((e: React.WheelEvent) => {
-    e.preventDefault();
-    const [vx, vy, vw, vh] = viewBox.split(" ").map(Number);
+  // Zoom centered on cursor — uses native event listener (non-passive) to avoid passive event error
+  useEffect(() => {
     const svg = svgRef.current;
     if (!svg) return;
-    const rect = svg.getBoundingClientRect();
-    const mx = ((e.clientX - rect.left) / rect.width) * vw + vx;
-    const my = ((e.clientY - rect.top) / rect.height) * vh + vy;
-    const f = e.deltaY > 0 ? 1.1 : 0.9;
-    const nvw = Math.max(20, Math.min(150, vw * f));
-    const nvh = nvw * (vh / vw);
-    const r = nvw / vw;
-    setViewBox(`${(mx - (mx - vx) * r).toFixed(1)} ${(my - (my - vy) * r).toFixed(1)} ${nvw.toFixed(1)} ${nvh.toFixed(1)}`);
+    const handler = (e: WheelEvent) => {
+      e.preventDefault();
+      const vb = viewBox.split(" ").map(Number);
+      const [vx, vy, vw, vh] = vb;
+      const rect = svg.getBoundingClientRect();
+      const mx = ((e.clientX - rect.left) / rect.width) * vw + vx;
+      const my = ((e.clientY - rect.top) / rect.height) * vh + vy;
+      const f = e.deltaY > 0 ? 1.1 : 0.9;
+      const nvw = Math.max(20, Math.min(150, vw * f));
+      const nvh = nvw * (vh / vw);
+      const r = nvw / vw;
+      setViewBox(`${(mx - (mx - vx) * r).toFixed(1)} ${(my - (my - vy) * r).toFixed(1)} ${nvw.toFixed(1)} ${nvh.toFixed(1)}`);
+    };
+    svg.addEventListener("wheel", handler, { passive: false });
+    return () => { svg.removeEventListener("wheel", handler); };
   }, [viewBox]);
 
   // Pan
@@ -267,7 +318,7 @@ function GraphView() {
               {LAYOUT_DEFS.map((l) => (
                 <button
                   key={l.id}
-                  onClick={(e) => { e.stopPropagation(); e.preventDefault(); setLayoutMode(l.id); setShowLayoutMenu(false); }}
+                  onClick={(e) => { e.stopPropagation(); e.preventDefault(); startLayoutTransition(() => { setLayoutMode(l.id); }); setShowLayoutMenu(false); }}
                   className={`w-full px-3 py-2 rounded text-left text-[11px] font-mono flex items-center gap-2 transition-colors ${
                     layoutMode === l.id ? "bg-cyan-400/15 text-cyan-400" : "text-slate-400 hover:bg-slate-800/50 hover:text-slate-200"
                   }`}
@@ -299,9 +350,16 @@ function GraphView() {
         </button>
       </div>
 
+      {/* Layout error banner */}
+      {layoutError && (
+        <div className="absolute top-10 left-1/2 -translate-x-1/2 z-20 bg-red-950/80 border border-red-500/30 rounded px-3 py-1.5 text-[10px] text-red-400 font-mono">
+          Error en layout: {layoutError} — <button onClick={() => { setLayoutMode("original"); setLayoutError(null); }} className="underline ml-1">Volver a Original</button>
+        </div>
+      )}
+
       {/* SVG Graph */}
       <svg ref={svgRef} viewBox={viewBox} className="w-full h-full cursor-grab active:cursor-grabbing"
-        onWheel={handleWheel} onMouseDown={handleMouseDown} onMouseMove={handleMouseMove}
+        onMouseDown={handleMouseDown} onMouseMove={handleMouseMove}
         onMouseUp={() => setIsDragging(false)} onMouseLeave={() => setIsDragging(false)}
         onClick={(e) => { if (!(e.target as Element).closest(".gn")) setSelectedNation(null); }}
         style={{ touchAction: "none" }}>
@@ -917,7 +975,9 @@ export default function Home() {
       <main className="h-[calc(100vh-4.5rem)] flex overflow-hidden">
         {/* LEFT: Graph — always visible, takes available space */}
         <div className="flex-1 min-w-0 p-1.5">
-          <GraphView />
+          <GraphErrorBoundary>
+            <GraphView />
+          </GraphErrorBoundary>
         </div>
 
         {/* RIGHT: Sidebar with collapsible panels */}
