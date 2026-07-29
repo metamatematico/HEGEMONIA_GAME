@@ -665,13 +665,24 @@ export default function Home() {
   const actionsLeft = useHegemoniaStore((s) => s.gameState.maxActionsPerTurn - s.gameState.playerActionsUsedThisTurn);
   const setActionTarget = useHegemoniaStore((s) => s.setActionTarget);
 
+  // Hydration guard: ensure intro shows on first client mount
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+    // Force intro screen on fresh load
+    const current = useHegemoniaStore.getState().gameScreen;
+    if (current !== "playing") {
+      useHegemoniaStore.getState().setGameScreen("intro");
+    }
+  }, []);
+
   // Auto-play timer
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const speed = useHegemoniaStore((s) => s.gameState.speed);
   const isPaused = useHegemoniaStore((s) => s.gameState.isPaused);
 
   useEffect(() => {
-    if (isPaused) {
+    if (!mounted || isPaused) {
       if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
       return;
     }
@@ -679,11 +690,20 @@ export default function Home() {
       runNextTurn();
     }, speed);
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
-  }, [isPaused, speed, runNextTurn]);
+  }, [mounted, isPaused, speed, runNextTurn]);
 
   const phases: Phase[] = ["production", "trade", "ideological_spread", "class_dynamics", "npc_decisions", "player_decisions", "classification_update", "metrics_update"];
 
   // ─── Game flow routing (after all hooks) ───
+  // During SSR or before hydration, show a black loading screen
+  if (!mounted) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="w-3 h-3 rounded-full bg-cyan-400 animate-pulse" />
+      </div>
+    );
+  }
+
   if (gameScreen === "intro") {
     return (
       <GameIntroScreen onComplete={() => setGameScreen("setup")} />
@@ -696,7 +716,7 @@ export default function Home() {
         onStart={(nationId, primaryIdeology, secondaryIdeologies, trait, focus) => {
           startNewGame({ nationId, primaryIdeology, secondaryIdeologies, trait, focus });
         }}
-        onBack={() => {}}
+        onBack={() => backToSetup()}
       />
     );
   }

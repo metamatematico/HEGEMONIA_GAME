@@ -26,6 +26,7 @@ interface NationSetupScreenProps {
     trait: CulturalTrait,
     focus: StrategicFocus
   ) => void;
+  onBack?: () => void;
 }
 
 type Step = 0 | 1 | 2 | 3;
@@ -46,7 +47,7 @@ const stepVariantsBack = {
   exit: { x: 80, opacity: 0 },
 };
 
-export default function NationSetupScreen({ onStart }: NationSetupScreenProps) {
+export default function NationSetupScreen({ onStart, onBack }: NationSetupScreenProps) {
   const [step, setStep] = useState<Step>(0);
   const [selectedNationId, setSelectedNationId] = useState<string | null>(null);
   const [primaryIdeology, setPrimaryIdeology] = useState<Ideology | null>(null);
@@ -108,8 +109,10 @@ export default function NationSetupScreen({ onStart }: NationSetupScreenProps) {
     if (step > 0) {
       setAnimDirection("back");
       setStep((prev) => (prev - 1) as Step);
+    } else if (onBack) {
+      onBack();
     }
-  }, [step]);
+  }, [step, onBack]);
 
   const handleStart = useCallback(() => {
     if (!selectedNationId || !primaryIdeology || !selectedTrait || !selectedFocus) return;
@@ -683,10 +686,9 @@ export default function NationSetupScreen({ onStart }: NationSetupScreenProps) {
         <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
           <button
             onClick={goBack}
-            disabled={step === 0}
             className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-mono transition-all ${
               step === 0
-                ? "text-slate-700 cursor-not-allowed"
+                ? "text-slate-400 hover:bg-slate-800 hover:text-white border border-slate-700/50"
                 : "text-slate-300 hover:bg-slate-800 hover:text-white border border-slate-700"
             }`}
           >
