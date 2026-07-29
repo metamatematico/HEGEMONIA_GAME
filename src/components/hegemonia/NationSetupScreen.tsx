@@ -11,9 +11,13 @@ import {
   TRAIT_INFO,
   FOCUS_INFO,
   CLASS_INFO,
+  DIFFICULTY_INFO,
+  OPPONENT_INFO,
   type Ideology,
   type CulturalTrait,
   type StrategicFocus,
+  type GameDifficulty,
+  type OpponentType,
   type NationNode,
 } from "@/core/types";
 import { createInitialNations } from "@/core/initial-data";
@@ -24,15 +28,20 @@ interface NationSetupScreenProps {
     primaryIdeology: Ideology,
     secondaryIdeologies: Ideology[],
     trait: CulturalTrait,
-    focus: StrategicFocus
+    focus: StrategicFocus,
+    difficulty: GameDifficulty,
+    opponentType: OpponentType
   ) => void;
   onBack?: () => void;
 }
 
-type Step = 0 | 1 | 2 | 3;
+type Step = 0 | 1 | 2 | 3 | 4;
 
-const STEP_LABELS = ["Nación", "Ideología", "Rasgo Cultural", "Enfoque Estratégico"];
-const STEP_ICONS = ["🏴", "💭", "🎭", "🎯"];
+const STEP_LABELS = ["Nación", "Ideología", "Rasgo Cultural", "Enfoque Estratégico", "Modo de Juego"];
+const STEP_ICONS = ["🏴", "💭", "🎭", "🎯", "⚙️"];
+
+const ALL_DIFFICULTIES: GameDifficulty[] = ["facil", "normal", "dificil", "hegemon"];
+const ALL_OPPONENTS: OpponentType[] = ["ia", "humano"];
 
 // ─── Animated wrapper for step transitions ───
 const stepVariants = {
@@ -54,6 +63,8 @@ export default function NationSetupScreen({ onStart, onBack }: NationSetupScreen
   const [secondaryIdeologies, setSecondaryIdeologies] = useState<Ideology[]>([]);
   const [selectedTrait, setSelectedTrait] = useState<CulturalTrait | null>(null);
   const [selectedFocus, setSelectedFocus] = useState<StrategicFocus | null>(null);
+  const [difficulty, setDifficulty] = useState<GameDifficulty>("normal");
+  const [opponentType, setOpponentType] = useState<OpponentType>("ia");
   const [animDirection, setAnimDirection] = useState<"forward" | "back">("forward");
 
   const nations = useMemo(() => createInitialNations(), []);
@@ -95,11 +106,12 @@ export default function NationSetupScreen({ onStart, onBack }: NationSetupScreen
     if (step === 1) return primaryIdeology !== null;
     if (step === 2) return selectedTrait !== null;
     if (step === 3) return selectedFocus !== null;
+    if (step === 4) return difficulty !== null;
     return false;
-  }, [step, selectedNationId, primaryIdeology, selectedTrait, selectedFocus]);
+  }, [step, selectedNationId, primaryIdeology, selectedTrait, selectedFocus, difficulty]);
 
   const goNext = useCallback(() => {
-    if (step < 3) {
+    if (step < 4) {
       setAnimDirection("forward");
       setStep((prev) => (prev + 1) as Step);
     }
@@ -116,8 +128,8 @@ export default function NationSetupScreen({ onStart, onBack }: NationSetupScreen
 
   const handleStart = useCallback(() => {
     if (!selectedNationId || !primaryIdeology || !selectedTrait || !selectedFocus) return;
-    onStart(selectedNationId, primaryIdeology, secondaryIdeologies, selectedTrait, selectedFocus);
-  }, [selectedNationId, primaryIdeology, secondaryIdeologies, selectedTrait, selectedFocus, onStart]);
+    onStart(selectedNationId, primaryIdeology, secondaryIdeologies, selectedTrait, selectedFocus, difficulty, opponentType);
+  }, [selectedNationId, primaryIdeology, secondaryIdeologies, selectedTrait, selectedFocus, difficulty, opponentType, onStart]);
 
   const toggleSecondaryIdeology = useCallback(
     (ideo: Ideology) => {
@@ -624,6 +636,109 @@ export default function NationSetupScreen({ onStart, onBack }: NationSetupScreen
                   )}
                 </div>
 
+              </motion.div>
+            )}
+
+            {/* ─── STEP 4: Game Mode (Difficulty + Opponent) ─── */}
+            {step === 4 && (
+              <motion.div
+                key="step-4"
+                variants={variants}
+                initial="enter"
+                animate="center"
+                exit="exit"
+                transition={{ duration: 0.3 }}
+              >
+                <h2 className="text-xl font-bold text-white mb-1">Configura tu Partida</h2>
+                <p className="text-sm text-slate-400 mb-6">
+                  Elige la dificultad y contra quién jugarás. Esto afecta el comportamiento de las naciones controladas por IA.
+                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                  {/* Difficulty section */}
+                  <div>
+                    <h3 className="text-sm font-bold text-cyan-400 font-mono mb-3 flex items-center gap-2">
+                      🎚️ Dificultad
+                    </h3>
+                    <div className="space-y-2">
+                      {ALL_DIFFICULTIES.map((d) => {
+                        const info = DIFFICULTY_INFO[d];
+                        const isSelected = difficulty === d;
+                        return (
+                          <motion.button
+                            key={d}
+                            onClick={() => setDifficulty(d)}
+                            className={`w-full p-4 rounded-lg border text-left transition-all ${
+                              isSelected
+                                ? "border-cyan-500 bg-cyan-500/10 ring-1 ring-cyan-500/30"
+                                : "border-slate-800 bg-slate-900/50 hover:border-slate-600 hover:bg-slate-800/50"
+                            }`}
+                            whileHover={{ scale: 1.01 }}
+                            whileTap={{ scale: 0.99 }}
+                          >
+                            <div className="flex items-center justify-between mb-1">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xl">{info.icon}</span>
+                                <span className="font-bold text-white">{info.label}</span>
+                              </div>
+                              {isSelected && (
+                                <div className="w-5 h-5 rounded-full bg-cyan-500 flex items-center justify-center">
+                                  <Check className="w-3 h-3 text-white" />
+                                </div>
+                              )}
+                            </div>
+                            <p className="text-xs text-slate-400 mb-2">{info.desc}</p>
+                            <div className="flex gap-4 text-[10px] font-mono">
+                              <span className="text-emerald-400">NPC ×{info.npcBonus}</span>
+                              <span className="text-amber-400">Jugador ×{info.playerBonus}</span>
+                              <span className="text-red-400">Agresión {Math.round(info.npcAggression * 100)}%</span>
+                            </div>
+                          </motion.button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Opponent section */}
+                  <div>
+                    <h3 className="text-sm font-bold text-cyan-400 font-mono mb-3 flex items-center gap-2">
+                      🎮 Tipo de Oponente
+                    </h3>
+                    <div className="space-y-2">
+                      {ALL_OPPONENTS.map((o) => {
+                        const info = OPPONENT_INFO[o];
+                        const isSelected = opponentType === o;
+                        return (
+                          <motion.button
+                            key={o}
+                            onClick={() => setOpponentType(o)}
+                            className={`w-full p-5 rounded-lg border text-left transition-all ${
+                              isSelected
+                                ? "border-cyan-500 bg-cyan-500/10 ring-1 ring-cyan-500/30"
+                                : "border-slate-800 bg-slate-900/50 hover:border-slate-600 hover:bg-slate-800/50"
+                            }`}
+                            whileHover={{ scale: 1.01 }}
+                            whileTap={{ scale: 0.99 }}
+                          >
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center gap-3">
+                                <span className="text-3xl">{info.icon}</span>
+                                <span className="font-bold text-lg text-white">{info.label}</span>
+                              </div>
+                              {isSelected && (
+                                <div className="w-5 h-5 rounded-full bg-cyan-500 flex items-center justify-center">
+                                  <Check className="w-3 h-3 text-white" />
+                                </div>
+                              )}
+                            </div>
+                            <p className="text-sm text-slate-400">{info.desc}</p>
+                          </motion.button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+
                 {/* Final summary */}
                 {selectedNation && primaryIdeology && selectedTrait && selectedFocus && (
                   <motion.div
@@ -634,7 +749,7 @@ export default function NationSetupScreen({ onStart, onBack }: NationSetupScreen
                     <p className="text-sm font-bold text-cyan-400 font-mono mb-3">
                       Resumen de tu perfil
                     </p>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
                       <div className="flex items-center gap-3">
                         <span className="text-2xl">{selectedNation.flag}</span>
                         <div>
@@ -649,12 +764,12 @@ export default function NationSetupScreen({ onStart, onBack }: NationSetupScreen
                       </div>
                       <div>
                         <p className="text-xs text-slate-500 mb-1">Ideología</p>
-                        <div className="flex items-center gap-2 flex-wrap">
+                        <div className="flex items-center gap-1 flex-wrap">
                           <span style={{ color: IDEOLOGY_INFO[primaryIdeology].color }}>
                             {IDEOLOGY_INFO[primaryIdeology].icon} {IDEOLOGY_INFO[primaryIdeology].name}
                           </span>
                           {secondaryIdeologies.map((s) => (
-                            <span key={s} className="text-slate-500">
+                            <span key={s} className="text-slate-500 text-xs">
                               + {IDEOLOGY_INFO[s].icon} {IDEOLOGY_INFO[s].name}
                             </span>
                           ))}
@@ -670,6 +785,18 @@ export default function NationSetupScreen({ onStart, onBack }: NationSetupScreen
                         <p className="text-xs text-slate-500 mb-1">Enfoque Estratégico</p>
                         <span style={{ color: FOCUS_INFO[selectedFocus].color }}>
                           {FOCUS_INFO[selectedFocus].icon} {FOCUS_INFO[selectedFocus].name}
+                        </span>
+                      </div>
+                      <div>
+                        <p className="text-xs text-slate-500 mb-1">Dificultad</p>
+                        <span style={{ color: DIFFICULTY_INFO[difficulty].color }}>
+                          {DIFFICULTY_INFO[difficulty].icon} {DIFFICULTY_INFO[difficulty].label}
+                        </span>
+                      </div>
+                      <div>
+                        <p className="text-xs text-slate-500 mb-1">Modo</p>
+                        <span style={{ color: OPPONENT_INFO[opponentType].color }}>
+                          {OPPONENT_INFO[opponentType].icon} {OPPONENT_INFO[opponentType].label}
                         </span>
                       </div>
                     </div>
@@ -696,7 +823,7 @@ export default function NationSetupScreen({ onStart, onBack }: NationSetupScreen
             Atrás
           </button>
 
-          {step < 3 ? (
+          {step < 4 ? (
             <button
               onClick={goNext}
               disabled={!canAdvance}

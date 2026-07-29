@@ -619,6 +619,9 @@ export default function GameIntroScreen({ onComplete }: GameIntroScreenProps) {
               <p className="text-xs text-slate-600 font-mono mt-1">
                 Elige tu nación, define tu ideología y conquista el sistema-mundo
               </p>
+              <p className="text-[10px] text-slate-700 font-mono mt-3">
+                Desarrollado por <span className="text-slate-500">Leonardo Jiménez Martínez</span> & <span className="text-slate-500">Super Z</span>
+              </p>
             </motion.div>
           </motion.div>
         )}

@@ -409,12 +409,57 @@ export type CulturalTrait =
   | "diplomatic"       // +diplomatic power, alliance bonus
   | "fortified";       // +defense, stability under siege
 
+export type GameDifficulty = "facil" | "normal" | "dificil" | "hegemon";
+
+export type OpponentType = "ia" | "humano";
+
+export const DIFFICULTY_INFO: Record<GameDifficulty, {
+  label: string; icon: string; color: string; desc: string;
+  npcBonus: number; playerBonus: number; npcAggression: number;
+}> = {
+  facil: {
+    label: "Fácil", icon: "🟢", color: "#10b981",
+    desc: "NPCs con bonuses reducidos. Ideal para aprender.",
+    npcBonus: 0.6, playerBonus: 1.3, npcAggression: 0.3,
+  },
+  normal: {
+    label: "Normal", icon: "🟡", color: "#f59e0b",
+    desc: "Equilibrio justo. Todos juegan con las mismas reglas.",
+    npcBonus: 1.0, playerBonus: 1.0, npcAggression: 0.5,
+  },
+  dificil: {
+    label: "Difícil", icon: "🔴", color: "#ef4444",
+    desc: "NPCs más agresivos y eficientes. Desafío real.",
+    npcBonus: 1.3, playerBonus: 1.0, npcAggression: 0.75,
+  },
+  hegemon: {
+    label: "Hegemón", icon: "💀", color: "#a855f7",
+    desc: "Máxima dificultad. NPCs optimizados sin piedad.",
+    npcBonus: 1.5, playerBonus: 0.85, npcAggression: 0.95,
+  },
+};
+
+export const OPPONENT_INFO: Record<OpponentType, {
+  label: string; icon: string; color: string; desc: string;
+}> = {
+  ia: {
+    label: "vs IA", icon: "🤖", color: "#06b6d4",
+    desc: "Todas las demás naciones son controladas por inteligencia artificial.",
+  },
+  humano: {
+    label: "vs Humano", icon: "👤", color: "#f59e0b",
+    desc: "Modo hot-seat: dos jugadores humanos se turnan en el mismo dispositivo.",
+  },
+};
+
 export interface PlayerProfile {
   nationId: string;
   primaryIdeology: Ideology;
   secondaryIdeologies: Ideology[];  // 0-2 more
   focus: StrategicFocus;
   trait: CulturalTrait;
+  difficulty: GameDifficulty;
+  opponentType: OpponentType;
 }
 
 // ─── Extended Info for Setup Screen ──────────────────────────

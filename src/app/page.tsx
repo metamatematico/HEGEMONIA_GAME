@@ -10,16 +10,17 @@ import {
 import {
   Play, Pause, SkipForward, Save, Download, Settings, Globe, Activity, Users,
   TrendingUp, Crown, Swords, Brain, ChevronRight, ChevronLeft, FastForward,
-  Maximize2, Minimize2, X, Menu, Map, BarChart3, ScrollText, Gamepad2, Layers
+  Maximize2, Minimize2, X, Menu, Map, BarChart3, ScrollText, Gamepad2, Layers,
+  Network, CircleDot, Radar as RadarIcon, GitBranch, PieChart as PieChartIcon
 } from "lucide-react";
 import { useHegemoniaStore } from "@/store/hegemonia-store";
 import GameIntroScreen from "@/components/hegemonia/GameIntroScreen";
 import NationSetupScreen from "@/components/hegemonia/NationSetupScreen";
 import {
-  IDEOLOGY_INFO, TRAIT_INFO, CLASS_INFO, PHASE_LABELS, type Phase,
+  IDEOLOGY_INFO, TRAIT_INFO, CLASS_INFO, PHASE_LABELS, DIFFICULTY_INFO, OPPONENT_INFO, type Phase,
 } from "@/core/types";
 import type { NationNode, TradeEdge, PlayerActionType } from "@/core/types";
-import { getTopPartners } from "@/core/algorithms";
+import { getTopPartners, eigenvectorCentrality, betweennessCentrality, pageRank } from "@/core/algorithms";
 import {
   PLAYER_ACTIONS, getPlayerActionMeta, isOnCooldown, canAfford, getEffectiveCost,
 } from "@/core/player-actions";
@@ -81,12 +82,26 @@ function CollapsiblePanel({ title, icon: Icon, children, className, panelId, isO
   );
 }
 
+// ─── Graph Layout type ───
+type GraphLayout = "original" | "hierarchy" | "eigenvector" | "betweenness" | "pagerank" | "gdp";
+
+const LAYOUT_DEFS: { id: GraphLayout; label: string; icon: React.ElementType; desc: string }[] = [
+  { id: "original", label: "Original", icon: Map, desc: "Posiciones originales (geográficas)" },
+  { id: "hierarchy", label: "Jerarquía", icon: Network, desc: "Distribución por Core / Semi / Periferia" },
+  { id: "eigenvector", label: "Eigenvector", icon: RadarIcon, desc: "Centralidad de eigenvector (influencia)" },
+  { id: "betweenness", label: "Betweenness", icon: GitBranch, desc: "Centralidad de intermediación" },
+  { id: "pagerank", label: "PageRank", icon: CircleDot, desc: "Influencia en la red comercial" },
+  { id: "gdp", label: "GDP", icon: TrendingUp, desc: "Ordenado por Producto Interno Bruto" },
+];
+
 // ─── GRAPH VIEW with full interactivity ───
 function GraphView() {
   const svgRef = useRef<SVGSVGElement>(null);
   const [hoveredNode, setHoveredNode] = useState<string | null>(null);
   const [viewBox, setViewBox] = useState("-5 -5 110 90");
   const [isDragging, setIsDragging] = useState(false);
+  const [layoutMode, setLayoutMode] = useState<GraphLayout>("original");
+  const [showLayoutMenu, setShowLayoutMenu] = useState(false);
   const dragStart = useRef({ x: 0, y: 0 });
   const vbStart = useRef({ x: -5, y: -5 });
 
@@ -99,6 +114,70 @@ function GraphView() {
   const setActionTarget = useHegemoniaStore((s) => s.setActionTarget);
 
   const maxVolume = useMemo(() => Math.max(1, ...edges.map((e) => e.volume)), [edges]);
+
+  // ─── Layout position overrides ───
+  const layoutPositions = useMemo(() => {
+    if (layoutMode === "original") return null;
+
+    const pos = new Map<string, { x: number; y: number }>();
+
+    if (layoutMode === "hierarchy") {
+      // Arrange by worldClass in rows: core on top, semi in middle, periphery on bottom
+      const byClass: Record<string, NationNode[]> = { core: [], semi: [], periphery: [] };
+      for (const n of nations) byClass[n.worldClass]?.push(n);
+      const rows: { nodes: NationNode[]; y: number }[] = [
+        { nodes: byClass.core || [], y: 15 },
+        { nodes: byClass.semi || [], y: 45 },
+        { nodes: byClass.periphery || [], y: 72 },
+      ];
+      for (const row of rows) {
+        const spacing = 90 / Math.max(1, row.nodes.length + 1);
+        row.nodes.forEach((n, i) => {
+          pos.set(n.id, { x: 5 + spacing * (i + 1), y: row.y });
+        });
+      }
+    } else if (layoutMode === "eigenvector" || layoutMode === "betweenness" || layoutMode === "pagerank") {
+      const scores = layoutMode === "eigenvector"
+        ? eigenvectorCentrality(nations, edges)
+        : layoutMode === "betweenness"
+          ? betweennessCentrality(nations, edges)
+          : pageRank(nations, edges);
+
+      // Sort by score, arrange in a spiral/grid pattern
+      const sorted = [...nations].sort((a, b) => (scores.get(b.id) ?? 0) - (scores.get(a.id) ?? 0));
+      const cols = Math.ceil(Math.sqrt(sorted.length));
+      sorted.forEach((n, i) => {
+        const col = i % cols;
+        const row = Math.floor(i / cols);
+        pos.set(n.id, {
+          x: 5 + (80 / (cols - 1 || 1)) * col,
+          y: 5 + (70 / Math.ceil(sorted.length / cols) - 1 || 1) * row,
+        });
+      });
+    } else if (layoutMode === "gdp") {
+      const sorted = [...nations].sort((a, b) => b.gdp - a.gdp);
+      const cols = Math.ceil(Math.sqrt(sorted.length));
+      sorted.forEach((n, i) => {
+        const col = i % cols;
+        const row = Math.floor(i / cols);
+        pos.set(n.id, {
+          x: 5 + (80 / (cols - 1 || 1)) * col,
+          y: 5 + (70 / Math.ceil(sorted.length / cols) - 1 || 1) * row,
+        });
+      });
+    }
+
+    return pos;
+  }, [layoutMode, nations, edges]);
+
+  // Helper: get position for a nation (layout override or original)
+  const getNodePos = useCallback((n: NationNode) => {
+    if (layoutPositions) {
+      const p = layoutPositions.get(n.id);
+      if (p) return p;
+    }
+    return { x: n.x, y: n.y };
+  }, [layoutPositions]);
 
   // Zoom centered on cursor
   const handleWheel = useCallback((e: React.WheelEvent) => {
@@ -166,7 +245,37 @@ function GraphView() {
       </div>
 
       {/* Controls bar */}
-      <div className="absolute bottom-3 right-3 z-10 flex gap-1.5">
+      <div className="absolute bottom-3 right-3 z-10 flex gap-1.5 items-center">
+        {/* Layout selector */}
+        <div className="relative">
+          <button
+            onClick={(e) => { e.stopPropagation(); setShowLayoutMenu(!showLayoutMenu); }}
+            className={`h-7 px-2 rounded bg-black/40 backdrop-blur-sm border border-slate-800/30 flex items-center gap-1 hover:bg-slate-800/50 transition-colors text-[10px] font-mono ${layoutMode !== "original" ? "text-cyan-400 border-cyan-400/40" : "text-slate-400"}`}
+            title="Distribución del grafo"
+          >
+            <Network className="w-3 h-3" />
+            <span className="hidden sm:inline">{LAYOUT_DEFS.find(l => l.id === layoutMode)?.label}</span>
+          </button>
+          {showLayoutMenu && (
+            <div className="absolute bottom-9 right-0 bg-[#111827] border border-slate-700/50 rounded-lg shadow-xl p-1 min-w-[180px] z-50" onClick={(e) => e.stopPropagation()}>
+              {LAYOUT_DEFS.map((l) => (
+                <button
+                  key={l.id}
+                  onClick={() => { setLayoutMode(l.id); setShowLayoutMenu(false); }}
+                  className={`w-full px-3 py-2 rounded text-left text-[11px] font-mono flex items-center gap-2 transition-colors ${
+                    layoutMode === l.id ? "bg-cyan-400/15 text-cyan-400" : "text-slate-400 hover:bg-slate-800/50 hover:text-slate-200"
+                  }`}
+                >
+                  <l.icon className="w-3.5 h-3.5 shrink-0" />
+                  <div>
+                    <div className="font-semibold">{l.label}</div>
+                    <div className="text-[9px] text-slate-500">{l.desc}</div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
         <button onClick={resetView}
           className="w-7 h-7 rounded bg-black/40 backdrop-blur-sm border border-slate-800/30 flex items-center justify-center hover:bg-slate-800/50 transition-colors"
           title="Resetear vista">
@@ -201,11 +310,13 @@ function GraphView() {
           const from = nations.find((n) => n.id === e.from);
           const to = nations.find((n) => n.id === e.to);
           if (!from || !to) return null;
+          const fp = getNodePos(from);
+          const tp = getNodePos(to);
           const isHi = highlightNode ? (e.from === highlightNode || e.to === highlightNode) : false;
           const op = highlightNode ? (isHi ? 0.7 : 0.05) : 0.15 + (e.volume / maxVolume) * 0.25;
           const sc = isHi ? (e.type === "raw" ? "#10b981" : e.type === "manufactured" ? "#06b6d4" : "#a855f7") : "#334155";
           return (
-            <line key={i} x1={from.x} y1={from.y} x2={to.x} y2={to.y}
+            <line key={i} x1={fp.x} y1={fp.y} x2={tp.x} y2={tp.y}
               stroke={sc} strokeWidth={isHi ? Math.min(3, e.volume / 100) * 1.5 : Math.min(3, e.volume / 100)}
               opacity={op} strokeLinecap="round">
               {isHi && <animate attributeName="stroke-dasharray" values="2 6;6 2;2 6" dur="2s" repeatCount="indefinite" />}
@@ -215,6 +326,7 @@ function GraphView() {
 
         {/* Nodes */}
         {nations.map((n) => {
+          const { x: nx, y: ny } = getNodePos(n);
           const r = Math.max(3, 3 + (n.gdp / 4.5) * 7);
           const isSel = n.id === selectedNationId;
           const isHov = n.id === hoveredNode;
@@ -222,7 +334,7 @@ function GraphView() {
           const dimmed = highlightNode && !isSel && !isConn && n.id !== highlightNode;
           const color = classColor(n.worldClass);
           return (
-            <g key={n.id} className="gn" transform={`translate(${n.x},${n.y})`} opacity={dimmed ? 0.15 : 1}
+            <g key={n.id} className="gn" transform={`translate(${nx},${ny})`} opacity={dimmed ? 0.15 : 1}
               style={{ cursor: "pointer" }}
               onClick={(ev) => {
                 ev.stopPropagation();
@@ -712,8 +824,8 @@ export default function Home() {
   if (gameScreen === "setup") {
     return (
       <NationSetupScreen
-        onStart={(nationId, primaryIdeology, secondaryIdeologies, trait, focus) => {
-          startNewGame({ nationId, primaryIdeology, secondaryIdeologies, trait, focus });
+        onStart={(nationId, primaryIdeology, secondaryIdeologies, trait, focus, difficulty, opponentType) => {
+          startNewGame({ nationId, primaryIdeology, secondaryIdeologies, trait, focus, difficulty, opponentType });
         }}
         onBack={() => backToSetup()}
       />
@@ -728,7 +840,8 @@ export default function Home() {
         <div className="flex items-center gap-2">
           <Globe className="w-4 h-4 text-cyan-400" />
           <span className="text-sm font-bold text-white tracking-wide">HEGEMONÍA</span>
-          <span className="text-[10px] text-slate-500 uppercase tracking-wider">Engine v3.0</span>
+          <span className="text-[10px] text-slate-500 uppercase tracking-wider">v3.0</span>
+          <span className="text-[8px] text-slate-600 hidden lg:inline" title="Desarrollado por Leonardo Jiménez Martínez & Super Z (IA)">by Leonardo J.M. & Super Z</span>
         </div>
         <div className="h-6 w-px bg-slate-800" />
         <div className="flex items-center gap-3 text-[11px]">
@@ -743,6 +856,12 @@ export default function Home() {
         <div className="ml-auto flex items-center gap-2">
           {playerProfile && (
             <div className="flex items-center gap-1.5 mr-2">
+              <span className="text-[9px] px-1.5 py-0.5 rounded font-mono" style={{ background: DIFFICULTY_INFO[playerProfile.difficulty].color + "20", color: DIFFICULTY_INFO[playerProfile.difficulty].color }}>
+                {DIFFICULTY_INFO[playerProfile.difficulty].icon} {DIFFICULTY_INFO[playerProfile.difficulty].label}
+              </span>
+              <span className="text-[9px] px-1.5 py-0.5 rounded font-mono" style={{ background: OPPONENT_INFO[playerProfile.opponentType].color + "20", color: OPPONENT_INFO[playerProfile.opponentType].color }}>
+                {OPPONENT_INFO[playerProfile.opponentType].icon} {OPPONENT_INFO[playerProfile.opponentType].label}
+              </span>
               <span className="text-[9px] px-1.5 py-0.5 rounded font-mono" style={{ background: IDEOLOGY_INFO[playerProfile.primaryIdeology].color + "20", color: IDEOLOGY_INFO[playerProfile.primaryIdeology].color }}>
                 {IDEOLOGY_INFO[playerProfile.primaryIdeology].icon} {IDEOLOGY_INFO[playerProfile.primaryIdeology].name}
               </span>
