@@ -235,13 +235,13 @@ function GraphView() {
       </svg>
 
       {/* Top bar */}
-      <div className="absolute top-3 left-4 z-10 flex items-center gap-2">
+      <div className="absolute top-3 left-4 z-10 flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
         <div className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
         <span className="text-xs font-mono text-cyan-400/70 uppercase tracking-wider">Grafo Mundial — {nations.length} nodos, {edges.length} aristas</span>
       </div>
 
       {/* Legend */}
-      <div className="absolute top-3 right-3 z-10 flex flex-col gap-1.5 bg-black/40 backdrop-blur-sm rounded px-3 py-2 border border-slate-800/30">
+      <div className="absolute top-3 right-3 z-10 flex flex-col gap-1.5 bg-black/40 backdrop-blur-sm rounded px-3 py-2 border border-slate-800/30" onClick={(e) => e.stopPropagation()}>
         {(["core", "semi", "periphery"] as const).map((c) => (
           <div key={c} className="flex items-center gap-2">
             <div className="w-2.5 h-2.5 rounded-full" style={{ background: classColor(c) }} />
@@ -251,11 +251,11 @@ function GraphView() {
       </div>
 
       {/* Controls bar */}
-      <div className="absolute bottom-3 right-3 z-10 flex gap-1.5 items-center">
+      <div className="absolute bottom-3 right-3 z-10 flex gap-1.5 items-center" onClick={(e) => e.stopPropagation()}>
         {/* Layout selector */}
         <div className="relative">
           <button
-            onClick={(e) => { e.stopPropagation(); setShowLayoutMenu(!showLayoutMenu); }}
+            onClick={(e) => { e.stopPropagation(); e.preventDefault(); setShowLayoutMenu(!showLayoutMenu); }}
             className={`h-7 px-2 rounded bg-black/40 backdrop-blur-sm border border-slate-800/30 flex items-center gap-1 hover:bg-slate-800/50 transition-colors text-[10px] font-mono ${layoutMode !== "original" ? "text-cyan-400 border-cyan-400/40" : "text-slate-400"}`}
             title="Distribución del grafo"
           >
@@ -267,7 +267,7 @@ function GraphView() {
               {LAYOUT_DEFS.map((l) => (
                 <button
                   key={l.id}
-                  onClick={() => { setLayoutMode(l.id); setShowLayoutMenu(false); }}
+                  onClick={(e) => { e.stopPropagation(); e.preventDefault(); setLayoutMode(l.id); setShowLayoutMenu(false); }}
                   className={`w-full px-3 py-2 rounded text-left text-[11px] font-mono flex items-center gap-2 transition-colors ${
                     layoutMode === l.id ? "bg-cyan-400/15 text-cyan-400" : "text-slate-400 hover:bg-slate-800/50 hover:text-slate-200"
                   }`}
@@ -282,17 +282,17 @@ function GraphView() {
             </div>
           )}
         </div>
-        <button onClick={resetView}
+        <button onClick={(e) => { e.stopPropagation(); resetView(); }}
           className="w-7 h-7 rounded bg-black/40 backdrop-blur-sm border border-slate-800/30 flex items-center justify-center hover:bg-slate-800/50 transition-colors"
           title="Resetear vista">
           <Maximize2 className="w-3 h-3 text-slate-400" />
         </button>
-        <button onClick={() => setViewBox(vb => { const [x,y,w,h] = vb.split(" ").map(Number); return `${x.toFixed(1)} ${y.toFixed(1)} ${(w*0.7).toFixed(1)} ${(h*0.7).toFixed(1)}`; })}
+        <button onClick={(e) => { e.stopPropagation(); setViewBox(vb => { const [x,y,w,h] = vb.split(" ").map(Number); return `${x.toFixed(1)} ${y.toFixed(1)} ${(w*0.7).toFixed(1)} ${(h*0.7).toFixed(1)}`; }); }}
           className="w-7 h-7 rounded bg-black/40 backdrop-blur-sm border border-slate-800/30 flex items-center justify-center hover:bg-slate-800/50 transition-colors text-[11px] text-slate-400 font-bold"
           title="Zoom +">
           +
         </button>
-        <button onClick={() => setViewBox(vb => { const [x,y,w,h] = vb.split(" ").map(Number); return `${(x-w*0.15).toFixed(1)} ${(y-h*0.15).toFixed(1)} ${(w*1.3).toFixed(1)} ${(h*1.3).toFixed(1)}`; })}
+        <button onClick={(e) => { e.stopPropagation(); setViewBox(vb => { const [x,y,w,h] = vb.split(" ").map(Number); return `${(x-w*0.15).toFixed(1)} ${(y-h*0.15).toFixed(1)} ${(w*1.3).toFixed(1)} ${(h*1.3).toFixed(1)}`; }); }}
           className="w-7 h-7 rounded bg-black/40 backdrop-blur-sm border border-slate-800/30 flex items-center justify-center hover:bg-slate-800/50 transition-colors text-[11px] text-slate-400 font-bold"
           title="Zoom -">
           −
