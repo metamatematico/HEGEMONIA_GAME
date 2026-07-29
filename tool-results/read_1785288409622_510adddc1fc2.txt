@@ -1,0 +1,728 @@
+     1→"use client";
+     2→
+     3→import { useState, useMemo, useCallback } from "react";
+     4→import { motion, AnimatePresence } from "framer-motion";
+     5→import { ChevronLeft, ChevronRight, Check, AlertTriangle, Sparkles } from "lucide-react";
+     6→import {
+     7→  IDEOLOGY_INFO,
+     8→  IDEOLOGY_EXTENDED,
+     9→  IDEOLOGY_SYNERGIES,
+    10→  IDEOLOGY_CONFLICTS,
+    11→  TRAIT_INFO,
+    12→  FOCUS_INFO,
+    13→  CLASS_INFO,
+    14→  type Ideology,
+    15→  type CulturalTrait,
+    16→  type StrategicFocus,
+    17→  type NationNode,
+    18→} from "@/core/types";
+    19→import { createInitialNations } from "@/core/initial-data";
+    20→
+    21→interface NationSetupScreenProps {
+    22→  onStart: (
+    23→    nationId: string,
+    24→    primaryIdeology: Ideology,
+    25→    secondaryIdeologies: Ideology[],
+    26→    trait: CulturalTrait,
+    27→    focus: StrategicFocus
+    28→  ) => void;
+    29→}
+    30→
+    31→type Step = 0 | 1 | 2 | 3;
+    32→
+    33→const STEP_LABELS = ["Nación", "Ideología", "Rasgo Cultural", "Enfoque Estratégico"];
+    34→const STEP_ICONS = ["🏴", "💭", "🎭", "🎯"];
+    35→
+    36→// ─── Animated wrapper for step transitions ───
+    37→const stepVariants = {
+    38→  enter: { x: 80, opacity: 0 },
+    39→  center: { x: 0, opacity: 1 },
+    40→  exit: { x: -80, opacity: 0 },
+    41→};
+    42→
+    43→const stepVariantsBack = {
+    44→  enter: { x: -80, opacity: 0 },
+    45→  center: { x: 0, opacity: 1 },
+    46→  exit: { x: 80, opacity: 0 },
+    47→};
+    48→
+    49→export default function NationSetupScreen({ onStart }: NationSetupScreenProps) {
+    50→  const [step, setStep] = useState<Step>(0);
+    51→  const [selectedNationId, setSelectedNationId] = useState<string | null>(null);
+    52→  const [primaryIdeology, setPrimaryIdeology] = useState<Ideology | null>(null);
+    53→  const [secondaryIdeologies, setSecondaryIdeologies] = useState<Ideology[]>([]);
+    54→  const [selectedTrait, setSelectedTrait] = useState<CulturalTrait | null>(null);
+    55→  const [selectedFocus, setSelectedFocus] = useState<StrategicFocus | null>(null);
+    56→  const [animDirection, setAnimDirection] = useState<"forward" | "back">("forward");
+    57→
+    58→  const nations = useMemo(() => createInitialNations(), []);
+    59→
+    60→  const selectedNation = useMemo(
+    61→    () => nations.find((n) => n.id === selectedNationId) ?? null,
+    62→    [nations, selectedNationId]
+    63→  );
+    64→
+    65→  // ─── Synergy/conflict detection ───
+    66→  const detectedSynergies = useMemo(() => {
+    67→    const allSelected = primaryIdeology
+    68→      ? [primaryIdeology, ...secondaryIdeologies]
+    69→      : [...secondaryIdeologies];
+    70→    const synergies: [string, string][] = [];
+    71→    for (const [a, b] of IDEOLOGY_SYNERGIES) {
+    72→      if (allSelected.includes(a) && allSelected.includes(b)) {
+    73→        synergies.push([a, b]);
+    74→      }
+    75→    }
+    76→    return synergies;
+    77→  }, [primaryIdeology, secondaryIdeologies]);
+    78→
+    79→  const detectedConflicts = useMemo(() => {
+    80→    const allSelected = primaryIdeology
+    81→      ? [primaryIdeology, ...secondaryIdeologies]
+    82→      : [...secondaryIdeologies];
+    83→    const conflicts: [string, string][] = [];
+    84→    for (const [a, b] of IDEOLOGY_CONFLICTS) {
+    85→      if (allSelected.includes(a) && allSelected.includes(b)) {
+    86→        conflicts.push([a, b]);
+    87→      }
+    88→    }
+    89→    return conflicts;
+    90→  }, [primaryIdeology, secondaryIdeologies]);
+    91→
+    92→  const canAdvance = useMemo(() => {
+    93→    if (step === 0) return selectedNationId !== null;
+    94→    if (step === 1) return primaryIdeology !== null;
+    95→    if (step === 2) return selectedTrait !== null;
+    96→    if (step === 3) return selectedFocus !== null;
+    97→    return false;
+    98→  }, [step, selectedNationId, primaryIdeology, selectedTrait, selectedFocus]);
+    99→
+   100→  const goNext = useCallback(() => {
+   101→    if (step < 3) {
+   102→      setAnimDirection("forward");
+   103→      setStep((prev) => (prev + 1) as Step);
+   104→    }
+   105→  }, [step]);
+   106→
+   107→  const goBack = useCallback(() => {
+   108→    if (step > 0) {
+   109→      setAnimDirection("back");
+   110→      setStep((prev) => (prev - 1) as Step);
+   111→    }
+   112→  }, [step]);
+   113→
+   114→  const handleStart = useCallback(() => {
+   115→    if (!selectedNationId || !primaryIdeology || !selectedTrait || !selectedFocus) return;
+   116→    onStart(selectedNationId, primaryIdeology, secondaryIdeologies, selectedTrait, selectedFocus);
+   117→  }, [selectedNationId, primaryIdeology, secondaryIdeologies, selectedTrait, selectedFocus, onStart]);
+   118→
+   119→  const toggleSecondaryIdeology = useCallback(
+   120→    (ideo: Ideology) => {
+   121→      setSecondaryIdeologies((prev) => {
+   122→        if (prev.includes(ideo)) {
+   123→          return prev.filter((i) => i !== ideo);
+   124→        }
+   125→        if (prev.length >= 2) return prev;
+   126→        return [...prev, ideo];
+   127→      });
+   128→    },
+   129→    []
+   130→  );
+   131→
+   132→  const setAsPrimary = useCallback((ideo: Ideology) => {
+   133→    setPrimaryIdeology((prev) => {
+   134→      if (prev === ideo) return prev;
+   135→      // Move old primary to secondary if not already there
+   136→      setSecondaryIdeologies((sec) => {
+   137→        const filtered = sec.filter((s) => s !== ideo);
+   138→        if (prev && !filtered.includes(prev)) {
+   139→          filtered.push(prev);
+   140→          if (filtered.length > 2) filtered.shift();
+   141→        }
+   142→        return filtered;
+   143→      });
+   144→      return ideo;
+   145→    });
+   146→  }, []);
+   147→
+   148→  const variants = animDirection === "forward" ? stepVariants : stepVariantsBack;
+   149→
+   150→  return (
+   151→    <div className="min-h-screen bg-[#0a0e1a] text-slate-200 flex flex-col">
+   152→      {/* Header */}
+   153→      <header className="sticky top-0 z-30 bg-[#0a0e1a]/90 backdrop-blur-md border-b border-slate-800/50">
+   154→        <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
+   155→          <h1 className="text-lg font-bold text-cyan-400 font-mono tracking-wider">
+   156→            HEGEMONÍA
+   157→          </h1>
+   158→          <span className="text-xs text-slate-500 font-mono">Configuración de Partida</span>
+   159→        </div>
+   160→
+   161→        {/* Step indicator */}
+   162→        <div className="max-w-6xl mx-auto px-4 pb-4">
+   163→          <div className="flex items-center gap-1">
+   164→            {(STEP_LABELS as string[]).map((label, i) => {
+   165→              const stepNum = i as Step;
+   166→              const isActive = step === stepNum;
+   167→              const isCompleted = step > stepNum;
+   168→              return (
+   169→                <button
+   170→                  key={i}
+   171→                  onClick={() => {
+   172→                    // Allow navigating to completed steps or the current one
+   173→                    if (isCompleted || isActive) {
+   174→                      setAnimDirection(step > stepNum ? "back" : "forward");
+   175→                      setStep(stepNum);
+   176→                    }
+   177→                  }}
+   178→                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-mono transition-all ${
+   179→                    isActive
+   180→                      ? "bg-cyan-500/15 text-cyan-400 border border-cyan-500/30"
+   181→                      : isCompleted
+   182→                      ? "bg-slate-800/50 text-slate-400 border border-slate-700/50 hover:border-slate-600 cursor-pointer"
+   183→                      : "text-slate-600 border border-transparent cursor-default"
+   184→                  }`}
+   185→                >
+   186→                  <span>{STEP_ICONS[i]}</span>
+   187→                  <span className="hidden sm:inline">{label}</span>
+   188→                  {isCompleted && <Check className="w-3 h-3 text-emerald-400" />}
+   189→                </button>
+   190→              );
+   191→            })}
+   192→          </div>
+   193→        </div>
+   194→      </header>
+   195→
+   196→      {/* Content area */}
+   197→      <main className="flex-1 overflow-y-auto">
+   198→        <div className="max-w-6xl mx-auto px-4 py-6">
+   199→          <AnimatePresence mode="wait" custom={animDirection}>
+   200→            {/* ─── STEP 0: Nation Selection ─── */}
+   201→            {step === 0 && (
+   202→              <motion.div
+   203→                key="step-0"
+   204→                variants={variants}
+   205→                initial="enter"
+   206→                animate="center"
+   207→                exit="exit"
+   208→                transition={{ duration: 0.3 }}
+   209→              >
+   210→                <h2 className="text-xl font-bold text-white mb-1">Selecciona tu Nación</h2>
+   211→                <p className="text-sm text-slate-400 mb-6">
+   212→                  Elige la nación que guiarás hacia la hegemonía mundial.
+   213→                </p>
+   214→
+   215→                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 max-h-[70vh] overflow-y-auto pr-1 custom-scrollbar">
+   216→                  {nations.map((n) => {
+   217→                    const classInfo = CLASS_INFO[n.worldClass];
+   218→                    const isSelected = n.id === selectedNationId;
+   219→                    return (
+   220→                      <motion.button
+   221→                        key={n.id}
+   222→                        onClick={() => setSelectedNationId(n.id)}
+   223→                        className={`relative p-4 rounded-lg border text-left transition-all ${
+   224→                          isSelected
+   225→                            ? "border-cyan-500 bg-cyan-500/10 ring-1 ring-cyan-500/30"
+   226→                            : "border-slate-800 bg-slate-900/50 hover:border-slate-600 hover:bg-slate-800/50"
+   227→                        }`}
+   228→                        whileHover={{ scale: 1.01 }}
+   229→                        whileTap={{ scale: 0.99 }}
+   230→                      >
+   231→                        {/* Selected indicator */}
+   232→                        {isSelected && (
+   233→                          <div className="absolute top-2 right-2 w-5 h-5 rounded-full bg-cyan-500 flex items-center justify-center">
+   234→                            <Check className="w-3 h-3 text-white" />
+   235→                          </div>
+   236→                        )}
+   237→
+   238→                        <div className="flex items-center gap-3 mb-2">
+   239→                          <span className="text-2xl">{n.flag}</span>
+   240→                          <div>
+   241→                            <p className="font-bold text-sm text-white">{n.name}</p>
+   242→                            <span
+   243→                              className="text-[10px] font-mono px-1.5 py-0.5 rounded"
+   244→                              style={{
+   245→                                color: classInfo.color,
+   246→                                backgroundColor: classInfo.bgColor,
+   247→                              }}
+   248→                            >
+   249→                              {classInfo.label}
+   250→                            </span>
+   251→                          </div>
+   252→                        </div>
+   253→
+   254→                        <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] text-slate-400">
+   255→                          <span>GDP: <span className="text-slate-200">{n.gdp}B</span></span>
+   256→                          <span>Pop: <span className="text-slate-200">{n.population}M</span></span>
+   257→                          <span>Mil: <span className="text-slate-200">{n.militaryPower}</span></span>
+   258→                          <span>Dip: <span className="text-slate-200">{n.diplomaticPower}</span></span>
+   259→                        </div>
+   260→                      </motion.button>
+   261→                    );
+   262→                  })}
+   263→                </div>
+   264→
+   265→                {/* Selected nation summary */}
+   266→                {selectedNation && (
+   267→                  <motion.div
+   268→                    initial={{ opacity: 0, y: 10 }}
+   269→                    animate={{ opacity: 1, y: 0 }}
+   270→                    className="mt-4 p-4 bg-slate-900/70 border border-slate-700/50 rounded-lg"
+   271→                  >
+   272→                    <div className="flex items-center gap-4 flex-wrap">
+   273→                      <span className="text-3xl">{selectedNation.flag}</span>
+   274→                      <div>
+   275→                        <p className="font-bold text-lg text-white">{selectedNation.name}</p>
+   276→                        <div className="flex items-center gap-3 mt-1 text-xs text-slate-400">
+   277→                          <span style={{ color: CLASS_INFO[selectedNation.worldClass].color }}>
+   278→                            {CLASS_INFO[selectedNation.worldClass].label}
+   279→                          </span>
+   280→                          <span>·</span>
+   281→                          <span>
+   282→                            {IDEOLOGY_INFO[selectedNation.primaryIdeology].icon}{" "}
+   283→                            {IDEOLOGY_INFO[selectedNation.primaryIdeology].name}
+   284→                          </span>
+   285→                          {selectedNation.secondaryIdeologies.length > 0 && (
+   286→                            <span>
+   287→                              +{selectedNation.secondaryIdeologies.length} secundaria(s)
+   288→                            </span>
+   289→                          )}
+   290→                        </div>
+   291→                      </div>
+   292→                      <div className="ml-auto flex gap-4 text-xs text-slate-500">
+   293→                        <span>Resources: {selectedNation.resources.coal + selectedNation.resources.iron + selectedNation.resources.grain + selectedNation.resources.cotton}/400</span>
+   294→                      </div>
+   295→                    </div>
+   296→                  </motion.div>
+   297→                )}
+   298→              </motion.div>
+   299→            )}
+   300→
+   301→            {/* ─── STEP 1: Ideology Selection ─── */}
+   302→            {step === 1 && (
+   303→              <motion.div
+   304→                key="step-1"
+   305→                variants={variants}
+   306→                initial="enter"
+   307→                animate="center"
+   308→                exit="exit"
+   309→                transition={{ duration: 0.3 }}
+   310→              >
+   311→                <h2 className="text-xl font-bold text-white mb-1">Selecciona tu Ideología</h2>
+   312→                <p className="text-sm text-slate-400 mb-4">
+   313→                  Elige 1 primaria (golden border) y hasta 2 secundarias. Las ideologías compatibles
+   314→                  generan sinergias; las incompatibles generan conflictos.
+   315→                </p>
+   316→
+   317→                {/* Synergy / Conflict warnings */}
+   318→                {detectedSynergies.length > 0 && (
+   319→                  <div className="mb-3 p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-lg">
+   320→                    <div className="flex items-center gap-2 mb-1">
+   321→                      <Sparkles className="w-4 h-4 text-emerald-400" />
+   322→                      <span className="text-xs font-bold text-emerald-400 font-mono">
+   323→                        Sinergias activas ({detectedSynergies.length})
+   324→                      </span>
+   325→                    </div>
+   326→                    <div className="flex flex-wrap gap-2">
+   327→                      {detectedSynergies.map(([a, b]) => (
+   328→                        <span key={`${a}-${b}`} className="text-[11px] text-emerald-300/80 font-mono">
+   329→                          {IDEOLOGY_INFO[a as Ideology].icon} {IDEOLOGY_INFO[a as Ideology].name} +{" "}
+   330→                          {IDEOLOGY_INFO[b as Ideology].icon} {IDEOLOGY_INFO[b as Ideology].name}
+   331→                        </span>
+   332→                      ))}
+   333→                    </div>
+   334→                  </div>
+   335→                )}
+   336→                {detectedConflicts.length > 0 && (
+   337→                  <div className="mb-3 p-3 bg-rose-500/10 border border-rose-500/20 rounded-lg">
+   338→                    <div className="flex items-center gap-2 mb-1">
+   339→                      <AlertTriangle className="w-4 h-4 text-rose-400" />
+   340→                      <span className="text-xs font-bold text-rose-400 font-mono">
+   341→                        Conflictos detectados ({detectedConflicts.length})
+   342→                      </span>
+   343→                    </div>
+   344→                    <div className="flex flex-wrap gap-2">
+   345→                      {detectedConflicts.map(([a, b]) => (
+   346→                        <span key={`${a}-${b}`} className="text-[11px] text-rose-300/80 font-mono">
+   347→                          {IDEOLOGY_INFO[a as Ideology].icon} {IDEOLOGY_INFO[a as Ideology].name} ⚡{" "}
+   348→                          {IDEOLOGY_INFO[b as Ideology].icon} {IDEOLOGY_INFO[b as Ideology].name}
+   349→                        </span>
+   350→                      ))}
+   351→                    </div>
+   352→                  </div>
+   353→                )}
+   354→
+   355→                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[60vh] overflow-y-auto pr-1 custom-scrollbar">
+   356→                  {(Object.entries(IDEOLOGY_EXTENDED) as [Ideology, typeof IDEOLOGY_EXTENDED[Ideology]][]).map(
+   357→                    ([key, info]) => {
+   358→                      const isPrimary = primaryIdeology === key;
+   359→                      const isSecondary = secondaryIdeologies.includes(key);
+   360→                      const isOtherPrimary = primaryIdeology !== null && !isPrimary;
+   361→
+   362→                      return (
+   363→                        <motion.button
+   364→                          key={key}
+   365→                          onClick={() => {
+   366→                            if (isSecondary) {
+   367→                              toggleSecondaryIdeology(key);
+   368→                            } else {
+   369→                              setAsPrimary(key);
+   370→                            }
+   371→                          }}
+   372→                          className={`relative p-4 rounded-lg border text-left transition-all ${
+   373→                            isPrimary
+   374→                              ? "border-amber-400 bg-amber-400/10 ring-2 ring-amber-400/40"
+   375→                              : isSecondary
+   376→                              ? "border-cyan-500/50 bg-cyan-500/5 ring-1 ring-cyan-500/20"
+   377→                              : "border-slate-800 bg-slate-900/50 hover:border-slate-600 hover:bg-slate-800/50"
+   378→                          }`}
+   379→                          whileHover={{ scale: 1.01 }}
+   380→                          whileTap={{ scale: 0.99 }}
+   381→                        >
+   382→                          {/* Primary badge */}
+   383→                          {isPrimary && (
+   384→                            <div className="absolute top-2 right-2 text-[10px] font-bold font-mono text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded border border-amber-400/30">
+   385→                              PRIMARIA
+   386→                            </div>
+   387→                          )}
+   388→                          {isSecondary && (
+   389→                            <div className="absolute top-2 right-2 text-[10px] font-mono text-cyan-400 bg-cyan-400/10 px-2 py-0.5 rounded border border-cyan-400/30">
+   390→                              SECUNDARIA
+   391→                            </div>
+   392→                          )}
+   393→
+   394→                          <div className="flex items-center gap-3 mb-2">
+   395→                            <span className="text-2xl">{info.icon}</span>
+   396→                            <div>
+   397→                              <p className="font-bold text-sm text-white">{info.name}</p>
+   398→                              <span
+   399→                                className="text-[10px] font-mono"
+   400→                                style={{ color: info.color }}
+   401→                              >
+   402→                                {info.era}
+   403→                              </span>
+   404→                            </div>
+   405→                          </div>
+   406→
+   407→                          <p className="text-xs text-slate-400 mb-2">{info.desc}</p>
+   408→
+   409→                          {/* Bonuses */}
+   410→                          <div className="space-y-1 mb-2">
+   411→                            {info.bonuses.map((bonus, i) => (
+   412→                              <div key={i} className="flex items-start gap-1.5">
+   413→                                <span className="text-emerald-400 text-[10px] mt-0.5">+</span>
+   414→                                <span className="text-[11px] text-emerald-300/80">{bonus}</span>
+   415→                              </div>
+   416→                            ))}
+   417→                          </div>
+   418→
+   419→                          {/* Penalties */}
+   420→                          <div className="space-y-1">
+   421→                            {info.penalties.map((penalty, i) => (
+   422→                              <div key={i} className="flex items-start gap-1.5">
+   423→                                <span className="text-rose-400 text-[10px] mt-0.5">−</span>
+   424→                                <span className="text-[11px] text-rose-300/80">{penalty}</span>
+   425→                              </div>
+   426→                            ))}
+   427→                          </div>
+   428→
+   429→                          {/* Action hint */}
+   430→                          <div className="mt-3 pt-2 border-t border-slate-800/50">
+   431→                            <p className="text-[10px] text-slate-600">
+   432→                              {isPrimary
+   433→                                ? "Clic para deseleccionar"
+   434→                                : isSecondary
+   435→                                ? "Clic para quitar"
+   436→                                : isOtherPrimary
+   437→                                ? "Clic para hacer primaria (la anterior pasa a secundaria)"
+   438→                                : "Clic para hacer primaria"}
+   439→                            </p>
+   440→                          </div>
+   441→                        </motion.button>
+   442→                      );
+   443→                    }
+   444→                  )}
+   445→                </div>
+   446→
+   447→                {/* Current selection summary */}
+   448→                {primaryIdeology && (
+   449→                  <motion.div
+   450→                    initial={{ opacity: 0, y: 10 }}
+   451→                    animate={{ opacity: 1, y: 0 }}
+   452→                    className="mt-4 p-4 bg-slate-900/70 border border-slate-700/50 rounded-lg"
+   453→                  >
+   454→                    <p className="text-xs text-slate-500 font-mono mb-2">Tu combinación ideológica:</p>
+   455→                    <div className="flex items-center gap-3 flex-wrap">
+   456→                      <span
+   457→                        className="flex items-center gap-2 px-3 py-1.5 rounded-lg border-2 border-amber-400 bg-amber-400/10 text-sm font-bold"
+   458→                        style={{ color: IDEOLOGY_INFO[primaryIdeology].color }}
+   459→                      >
+   460→                        {IDEOLOGY_INFO[primaryIdeology].icon} {IDEOLOGY_INFO[primaryIdeology].name}
+   461→                        <span className="text-[10px] font-mono text-amber-400">PRIMARIA</span>
+   462→                      </span>
+   463→                      {secondaryIdeologies.map((s) => (
+   464→                        <span
+   465→                          key={s}
+   466→                          className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-cyan-500/50 bg-cyan-500/5 text-sm"
+   467→                          style={{ color: IDEOLOGY_INFO[s].color }}
+   468→                        >
+   469→                          {IDEOLOGY_INFO[s].icon} {IDEOLOGY_INFO[s].name}
+   470→                          <span className="text-[10px] font-mono text-cyan-400">SEC</span>
+   471→                        </span>
+   472→                      ))}
+   473→                      {secondaryIdeologies.length < 2 && (
+   474→                        <span className="text-xs text-slate-600 font-mono">
+   475→                          +{2 - secondaryIdeologies.length} secundaria(s) disponible(s)
+   476→                        </span>
+   477→                      )}
+   478→                    </div>
+   479→                  </motion.div>
+   480→                )}
+   481→              </motion.div>
+   482→            )}
+   483→
+   484→            {/* ─── STEP 2: Cultural Trait Selection ─── */}
+   485→            {step === 2 && (
+   486→              <motion.div
+   487→                key="step-2"
+   488→                variants={variants}
+   489→                initial="enter"
+   490→                animate="center"
+   491→                exit="exit"
+   492→                transition={{ duration: 0.3 }}
+   493→              >
+   494→                <h2 className="text-xl font-bold text-white mb-1">Selecciona tu Rasgo Cultural</h2>
+   495→                <p className="text-sm text-slate-400 mb-6">
+   496→                  El rasgo cultural define las acciones especiales disponibles y los bonuses pasivos
+   497→                  de tu nación.
+   498→                </p>
+   499→
+   500→                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 max-h-[70vh] overflow-y-auto pr-1 custom-scrollbar">
+   501→                  {(Object.entries(TRAIT_INFO) as [CulturalTrait, typeof TRAIT_INFO[CulturalTrait]][]).map(
+   502→                    ([key, info]) => {
+   503→                      const isSelected = selectedTrait === key;
+   504→                      return (
+   505→                        <motion.button
+   506→                          key={key}
+   507→                          onClick={() => setSelectedTrait(key)}
+   508→                          className={`relative p-4 rounded-lg border text-left transition-all ${
+   509→                            isSelected
+   510→                              ? "border-cyan-500 bg-cyan-500/10 ring-1 ring-cyan-500/30"
+   511→                              : "border-slate-800 bg-slate-900/50 hover:border-slate-600 hover:bg-slate-800/50"
+   512→                          }`}
+   513→                          whileHover={{ scale: 1.01 }}
+   514→                          whileTap={{ scale: 0.99 }}
+   515→                        >
+   516→                          {isSelected && (
+   517→                            <div className="absolute top-2 right-2 w-5 h-5 rounded-full bg-cyan-500 flex items-center justify-center">
+   518→                              <Check className="w-3 h-3 text-white" />
+   519→                            </div>
+   520→                          )}
+   521→
+   522→                          <div className="flex items-center gap-3 mb-2">
+   523→                            <span className="text-2xl">{info.icon}</span>
+   524→                            <div>
+   525→                              <p className="font-bold text-sm text-white">{info.name}</p>
+   526→                              <span
+   527→                                className="text-[10px] font-mono"
+   528→                                style={{ color: info.color }}
+   529→                              >
+   530→                                {key}
+   531→                              </span>
+   532→                            </div>
+   533→                          </div>
+   534→
+   535→                          <p className="text-xs text-slate-400 mb-2">{info.desc}</p>
+   536→
+   537→                          <div className="p-2 bg-slate-800/50 rounded">
+   538→                            <span className="text-[11px] text-emerald-300/80">
+   539→                              ✨ {info.effect}
+   540→                            </span>
+   541→                          </div>
+   542→                        </motion.button>
+   543→                      );
+   544→                    }
+   545→                  )}
+   546→                </div>
+   547→              </motion.div>
+   548→            )}
+   549→
+   550→            {/* ─── STEP 3: Strategic Focus Selection ─── */}
+   551→            {step === 3 && (
+   552→              <motion.div
+   553→                key="step-3"
+   554→                variants={variants}
+   555→                initial="enter"
+   556→                animate="center"
+   557→                exit="exit"
+   558→                transition={{ duration: 0.3 }}
+   559→              >
+   560→                <h2 className="text-xl font-bold text-white mb-1">Selecciona tu Enfoque Estratégico</h2>
+   561→                <p className="text-sm text-slate-400 mb-6">
+   562→                  Tu enfoque determina tus bonificaciones principales y debilidades. Elige con sabiduría.
+   563→                </p>
+   564→
+   565→                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[70vh] overflow-y-auto pr-1 custom-scrollbar">
+   566→                  {(Object.entries(FOCUS_INFO) as [StrategicFocus, typeof FOCUS_INFO[StrategicFocus]][]).map(
+   567→                    ([key, info]) => {
+   568→                      const isSelected = selectedFocus === key;
+   569→                      return (
+   570→                        <motion.button
+   571→                          key={key}
+   572→                          onClick={() => setSelectedFocus(key)}
+   573→                          className={`relative p-5 rounded-lg border text-left transition-all ${
+   574→                            isSelected
+   575→                              ? "border-cyan-500 bg-cyan-500/10 ring-1 ring-cyan-500/30"
+   576→                              : "border-slate-800 bg-slate-900/50 hover:border-slate-600 hover:bg-slate-800/50"
+   577→                          }`}
+   578→                          whileHover={{ scale: 1.01 }}
+   579→                          whileTap={{ scale: 0.99 }}
+   580→                        >
+   581→                          {isSelected && (
+   582→                            <div className="absolute top-2 right-2 w-5 h-5 rounded-full bg-cyan-500 flex items-center justify-center">
+   583→                              <Check className="w-3 h-3 text-white" />
+   584→                            </div>
+   585→                          )}
+   586→
+   587→                          <div className="flex items-center gap-3 mb-3">
+   588→                            <span className="text-3xl">{info.icon}</span>
+   589→                            <div>
+   590→                              <p className="font-bold text-base text-white">{info.name}</p>
+   591→                              <span
+   592→                                className="text-[10px] font-mono"
+   593→                                style={{ color: info.color }}
+   594→                              >
+   595→                                {key}
+   596→                              </span>
+   597→                            </div>
+   598→                          </div>
+   599→
+   600→                          <p className="text-sm text-slate-400 mb-3">{info.desc}</p>
+   601→
+   602→                          {/* Bonuses */}
+   603→                          <div className="space-y-1.5 mb-3">
+   604→                            {info.bonuses.map((bonus, i) => (
+   605→                              <div key={i} className="flex items-center justify-between">
+   606→                                <span className="text-xs text-slate-400">{bonus.stat}</span>
+   607→                                <span className="text-xs font-mono text-emerald-400">{bonus.value}</span>
+   608→                              </div>
+   609→                            ))}
+   610→                          </div>
+   611→
+   612→                          {/* Penalty */}
+   613→                          <div className="p-2 bg-slate-800/50 rounded">
+   614→                            <span className="text-xs text-rose-400">
+   615→                              ⚠ {info.penalty}
+   616→                            </span>
+   617→                          </div>
+   618→                        </motion.button>
+   619→                      );
+   620→                    }
+   621→                  )}
+   622→                </div>
+   623→
+   624→                {/* Final summary */}
+   625→                {selectedNation && primaryIdeology && selectedTrait && selectedFocus && (
+   626→                  <motion.div
+   627→                    initial={{ opacity: 0, y: 10 }}
+   628→                    animate={{ opacity: 1, y: 0 }}
+   629→                    className="mt-6 p-5 bg-slate-900/70 border border-cyan-500/20 rounded-lg"
+   630→                  >
+   631→                    <p className="text-sm font-bold text-cyan-400 font-mono mb-3">
+   632→                      Resumen de tu perfil
+   633→                    </p>
+   634→                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+   635→                      <div className="flex items-center gap-3">
+   636→                        <span className="text-2xl">{selectedNation.flag}</span>
+   637→                        <div>
+   638→                          <p className="font-bold text-white">{selectedNation.name}</p>
+   639→                          <span
+   640→                            className="text-[10px] font-mono"
+   641→                            style={{ color: CLASS_INFO[selectedNation.worldClass].color }}
+   642→                          >
+   643→                            {CLASS_INFO[selectedNation.worldClass].label}
+   644→                          </span>
+   645→                        </div>
+   646→                      </div>
+   647→                      <div>
+   648→                        <p className="text-xs text-slate-500 mb-1">Ideología</p>
+   649→                        <div className="flex items-center gap-2 flex-wrap">
+   650→                          <span style={{ color: IDEOLOGY_INFO[primaryIdeology].color }}>
+   651→                            {IDEOLOGY_INFO[primaryIdeology].icon} {IDEOLOGY_INFO[primaryIdeology].name}
+   652→                          </span>
+   653→                          {secondaryIdeologies.map((s) => (
+   654→                            <span key={s} className="text-slate-500">
+   655→                              + {IDEOLOGY_INFO[s].icon} {IDEOLOGY_INFO[s].name}
+   656→                            </span>
+   657→                          ))}
+   658→                        </div>
+   659→                      </div>
+   660→                      <div>
+   661→                        <p className="text-xs text-slate-500 mb-1">Rasgo Cultural</p>
+   662→                        <span style={{ color: TRAIT_INFO[selectedTrait].color }}>
+   663→                          {TRAIT_INFO[selectedTrait].icon} {TRAIT_INFO[selectedTrait].name}
+   664→                        </span>
+   665→                      </div>
+   666→                      <div>
+   667→                        <p className="text-xs text-slate-500 mb-1">Enfoque Estratégico</p>
+   668→                        <span style={{ color: FOCUS_INFO[selectedFocus].color }}>
+   669→                          {FOCUS_INFO[selectedFocus].icon} {FOCUS_INFO[selectedFocus].name}
+   670→                        </span>
+   671→                      </div>
+   672→                    </div>
+   673→                  </motion.div>
+   674→                )}
+   675→              </motion.div>
+   676→            )}
+   677→          </AnimatePresence>
+   678→        </div>
+   679→      </main>
+   680→
+   681→      {/* Footer navigation */}
+   682→      <footer className="sticky bottom-0 z-30 bg-[#0a0e1a]/90 backdrop-blur-md border-t border-slate-800/50">
+   683→        <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
+   684→          <button
+   685→            onClick={goBack}
+   686→            disabled={step === 0}
+   687→            className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-mono transition-all ${
+   688→              step === 0
+   689→                ? "text-slate-700 cursor-not-allowed"
+   690→                : "text-slate-300 hover:bg-slate-800 hover:text-white border border-slate-700"
+   691→            }`}
+   692→          >
+   693→            <ChevronLeft className="w-4 h-4" />
+   694→            Atrás
+   695→          </button>
+   696→
+   697→          {step < 3 ? (
+   698→            <button
+   699→              onClick={goNext}
+   700→              disabled={!canAdvance}
+   701→              className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-mono transition-all ${
+   702→                canAdvance
+   703→                  ? "bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 hover:bg-cyan-500/30"
+   704→                  : "text-slate-700 cursor-not-allowed border border-slate-800"
+   705→              }`}
+   706→            >
+   707→              Siguiente
+   708→              <ChevronRight className="w-4 h-4" />
+   709→            </button>
+   710→          ) : (
+   711→            <button
+   712→              onClick={handleStart}
+   713→              disabled={!canAdvance}
+   714→              className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold font-mono transition-all ${
+   715→                canAdvance
+   716→                  ? "bg-cyan-500 text-white hover:bg-cyan-400 shadow-lg shadow-cyan-500/20"
+   717→                  : "text-slate-700 cursor-not-allowed bg-slate-800"
+   718→              }`}
+   719→            >
+   720→              ⚡ Comenzar Partida
+   721→            </button>
+   722→          )}
+   723→        </div>
+   724→      </footer>
+   725→    </div>
+   726→  );
+   727→}
+   728→
