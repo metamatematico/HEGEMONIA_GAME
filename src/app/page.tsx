@@ -143,26 +143,32 @@ function GraphView() {
           ? betweennessCentrality(nations, edges)
           : pageRank(nations, edges);
 
-      // Sort by score, arrange in a spiral/grid pattern
+      // Sort by score descending, arrange in grid
       const sorted = [...nations].sort((a, b) => (scores.get(b.id) ?? 0) - (scores.get(a.id) ?? 0));
       const cols = Math.ceil(Math.sqrt(sorted.length));
+      const totalRows = Math.ceil(sorted.length / cols);
+      const colSpacing = cols > 1 ? 80 / (cols - 1) : 0;
+      const rowSpacing = totalRows > 1 ? 70 / (totalRows - 1) : 0;
       sorted.forEach((n, i) => {
         const col = i % cols;
         const row = Math.floor(i / cols);
         pos.set(n.id, {
-          x: 5 + (80 / (cols - 1 || 1)) * col,
-          y: 5 + (70 / Math.ceil(sorted.length / cols) - 1 || 1) * row,
+          x: 5 + colSpacing * col,
+          y: 5 + rowSpacing * row,
         });
       });
     } else if (layoutMode === "gdp") {
       const sorted = [...nations].sort((a, b) => b.gdp - a.gdp);
       const cols = Math.ceil(Math.sqrt(sorted.length));
+      const totalRows = Math.ceil(sorted.length / cols);
+      const colSpacing = cols > 1 ? 80 / (cols - 1) : 0;
+      const rowSpacing = totalRows > 1 ? 70 / (totalRows - 1) : 0;
       sorted.forEach((n, i) => {
         const col = i % cols;
         const row = Math.floor(i / cols);
         pos.set(n.id, {
-          x: 5 + (80 / (cols - 1 || 1)) * col,
-          y: 5 + (70 / Math.ceil(sorted.length / cols) - 1 || 1) * row,
+          x: 5 + colSpacing * col,
+          y: 5 + rowSpacing * row,
         });
       });
     }
